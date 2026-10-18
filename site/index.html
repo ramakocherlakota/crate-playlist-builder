@@ -494,6 +494,7 @@ end tell
     sel.length = 1;
     library.playlists.forEach((p, i) => { const o = document.createElement("option"); o.value = i; o.textContent = `${p.name} (${p.ids.length})`; sel.appendChild(o); });
     sel.disabled = !library.playlists.length;
+    sel.options[0].textContent = library.playlists.length ? "Start from a playlist…" : "No playlists in this file (use Export Library)";
   }
 
   // ---------- loading ----------
