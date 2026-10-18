@@ -37,6 +37,7 @@
   --warn-bg: #3a3014; --warn-fg: #f3d68a; color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body {
   background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.45;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
@@ -526,11 +527,19 @@ end tell
   }
   $("loadBtn").addEventListener("click", () => $("file").click());
   $("file").addEventListener("change", e => { readFile(e.target.files[0]); e.target.value = ""; });
-  let dragDepth = 0;
-  document.addEventListener("dragenter", e => { if (e.dataTransfer && [...e.dataTransfer.types].includes("Files")) { dragDepth++; $("dropHint").hidden = false; } });
-  document.addEventListener("dragleave", () => { dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) $("dropHint").hidden = true; });
-  document.addEventListener("dragover", e => e.preventDefault());
-  document.addEventListener("drop", e => { e.preventDefault(); dragDepth = 0; $("dropHint").hidden = true; readFile(e.dataTransfer.files[0]); });
+  // Show the drop overlay only while the browser keeps reporting a file drag; hide it as soon as
+  // those reports stop (Safari doesn't reliably fire a matching dragleave).
+  let dragTimer;
+  const hideDrop = () => { clearTimeout(dragTimer); $("dropHint").hidden = true; };
+  document.addEventListener("dragover", e => {
+    e.preventDefault();
+    if (!e.dataTransfer || ![...e.dataTransfer.types].includes("Files")) return;
+    $("dropHint").hidden = false;
+    clearTimeout(dragTimer); dragTimer = setTimeout(hideDrop, 250);
+  });
+  document.addEventListener("dragleave", e => { if (!e.relatedTarget) hideDrop(); });
+  document.addEventListener("dragend", hideDrop);
+  document.addEventListener("drop", e => { e.preventDefault(); hideDrop(); readFile(e.dataTransfer.files[0]); });
 
   loadLibrary(library);
 })();
