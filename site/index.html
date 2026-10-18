@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Browse your Apple Music library as Artist → Album → Song, tick what you want, and build a playlist from it.">
+<title>Crate Playlist Builder</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a record-crate tree on the left, a sticky "press the playlist" panel on the right; stacks on phones. */
+:root {
+  --bg: #f4f5f8;
+  --surface: #ffffff;
+  --fg: #1a1d29;
+  --muted: #5d6275;
+  --line: #dfe1e9;
+  --hover: #eceef5;
+  --accent: #3a46c9;
+  --accent-soft: #e4e6fb;
+  --on-accent: #ffffff;
+  --warn-bg: #fff4d6;
+  --warn-fg: #6b4a00;
+  --font-display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12141c; --surface: #1a1d28; --fg: #e7e9f2; --muted: #9a9fb4; --line: #2c3040;
+    --hover: #232736; --accent: #8f98ff; --accent-soft: #272c52; --on-accent: #10132a;
+    --warn-bg: #3a3014; --warn-fg: #f3d68a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12141c; --surface: #1a1d28; --fg: #e7e9f2; --muted: #9a9fb4; --line: #2c3040;
+  --hover: #232736; --accent: #8f98ff; --accent-soft: #272c52; --on-accent: #10132a;
+  --warn-bg: #3a3014; --warn-fg: #f3d68a; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 48px;
+}
+.wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(1.7rem, 3vw, 2.3rem); letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
+.sub { color: var(--muted); margin: 4px 0 0; max-width: 62ch; }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+.steps li { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; gap: 10px; font-size: 13.5px; }
+.steps b { font-family: var(--font-mono); color: var(--accent); font-weight: 500; }
+kbd, code { font-family: var(--font-mono); font-size: 0.9em; background: var(--hover); padding: 1px 5px; border-radius: 4px; }
+.banner { background: var(--warn-bg); color: var(--warn-fg); border-radius: 10px; padding: 10px 14px; font-size: 14px; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; }
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; align-items: start; }
+@media (max-width: 860px) { .main { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; border-bottom: 1px solid var(--line); align-items: center; }
+.toolbar input[type="search"] { flex: 1 1 200px; min-width: 0; }
+input[type="search"], input[type="text"], select {
+  font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px;
+}
+input:focus-visible, select:focus-visible, button:focus-visible, .caret:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+button { font: inherit; font-size: 14px; cursor: pointer; border-radius: 8px; padding: 7px 12px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); }
+button:hover { background: var(--hover); }
+button.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 600; }
+button.primary:hover { filter: brightness(1.08); background: var(--accent); }
+button:disabled { opacity: .5; cursor: not-allowed; }
+.toggles { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 13.5px; color: var(--muted); align-items: center; }
+.toggles label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+
+#tree { max-height: 70vh; overflow-y: auto; padding: 6px 0; }
+@media (max-width: 860px) { #tree { max-height: none; } }
+.row { display: flex; align-items: center; gap: 8px; padding: 4px 12px; min-height: 34px; }
+.row:hover { background: var(--hover); }
+.row input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--accent); flex: none; margin: 0; cursor: pointer; }
+.caret { width: 22px; height: 22px; flex: none; display: grid; place-items: center; border: 0; padding: 0; background: none; color: var(--muted); border-radius: 5px; }
+.caret svg { transition: transform .15s; }
+.caret[aria-expanded="true"] svg { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .caret svg { transition: none; } }
+.name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.artist > .name { font-weight: 600; }
+.album > .name { font-weight: 500; }
+.meta { color: var(--muted); font-size: 12.5px; font-family: var(--font-mono); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.chip { font-family: var(--font-mono); font-size: 11.5px; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.chip[data-none] { visibility: hidden; }
+.album { padding-left: 42px; }
+.track { padding-left: 100px; font-size: 14px; }
+.track .num { width: 2.6em; text-align: right; color: var(--muted); font-family: var(--font-mono); font-size: 12px; flex: none; font-variant-numeric: tabular-nums; }
+.track.off .name { color: var(--muted); }
+@media (max-width: 520px) { .album { padding-left: 30px; } .track { padding-left: 52px; } .artist .meta, .album .meta { display: none; } }
+.empty { padding: 32px 16px; color: var(--muted); text-align: center; }
+
+aside.panel { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+aside h2 { font-family: var(--font-display); font-weight: 600; font-size: 1.2rem; margin: 0; }
+.stat { display: flex; gap: 18px; }
+.stat div { display: flex; flex-direction: column; }
+.stat strong { font-family: var(--font-display); font-size: 1.6rem; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.stat span { font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; }
+.field label { color: var(--muted); }
+.check { display: flex; gap: 8px; align-items: flex-start; font-size: 13.5px; }
+.check input { margin-top: 3px; accent-color: var(--accent); }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.btns button { flex: 1 1 auto; }
+.status { font-size: 13px; color: var(--muted); min-height: 1.2em; }
+.howto { font-size: 13px; color: var(--muted); margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size: 11.5px; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px; margin-top: 8px; resize: vertical; }
+.drop-hint { position: fixed; inset: 0; background: color-mix(in srgb, var(--accent) 18%, transparent); border: 3px dashed var(--accent); display: grid; place-items: center; font-family: var(--font-display); font-size: 1.6rem; color: var(--fg); z-index: 20; pointer-events: none; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Crate Playlist Builder</h1>
+      <p class="sub">Browse your Apple Music library as Artist → Album → Song, tick what you want, and build a playlist from it.</p>
+    </div>
+    <div class="btns">
+      <input type="file" id="file" accept=".xml,text/xml,application/xml" class="sr">
+      <button class="primary" id="loadBtn" type="button">Load Library.xml</button>
+    </div>
+  </header>
+
+  <ol class="steps">
+    <li><b>1</b><span>In Music on your Mac: <kbd>File → Library → Export Library…</kbd> and save the XML.</span></li>
+    <li><b>2</b><span>Load that file here, or drag it onto this page. It stays in your browser and isn't uploaded.</span></li>
+    <li><b>3</b><span>Tick artists, albums or songs. Optionally start from one of your existing playlists.</span></li>
+    <li><b>4</b><span>Copy the script, paste it into <kbd>Script Editor</kbd>, and press Run.</span></li>
+  </ol>
+
+  <div class="banner" id="banner">
+    <span id="bannerText"><strong>Sample library.</strong> These songs are examples to show how it works. Load your own Library.xml to see your music.</span>
+  </div>
+
+  <div class="main">
+    <section class="panel" aria-label="Library">
+      <div class="toolbar">
+        <input type="search" id="search" placeholder="Search artists, albums, songs" aria-label="Search">
+        <select id="fromPlaylist" aria-label="Start from playlist"><option value="">Start from a playlist…</option></select>
+      </div>
+      <div class="toggles">
+        <label><input type="checkbox" id="byAlbumArtist" checked> Group by album artist</label>
+        <label><input type="checkbox" id="onlyChecked"> Show only ticked</label>
+        <span style="flex:1"></span>
+        <button type="button" id="expandAll">Expand all</button>
+        <button type="button" id="collapseAll">Collapse all</button>
+        <button type="button" id="selAll">Tick all</button>
+        <button type="button" id="selNone">Clear</button>
+      </div>
+      <div id="tree" role="tree" aria-label="Artists"></div>
+    </section>
+
+    <aside class="panel" aria-label="Playlist">
+      <h2>Your playlist</h2>
+      <div class="stat">
+        <div><strong id="statSongs">0</strong><span>Songs</span></div>
+        <div><strong id="statAlbums">0</strong><span>Albums</span></div>
+        <div><strong id="statTime">0:00</strong><span>Length</span></div>
+      </div>
+      <div class="field">
+        <label for="plName">Playlist name</label>
+        <input type="text" id="plName" value="My Picks">
+      </div>
+      <label class="check"><input type="checkbox" id="replace" checked> <span>If a playlist with this name already exists, replace its songs</span></label>
+      <div class="btns">
+        <button class="primary" type="button" id="copyBtn">Copy script</button>
+        <button type="button" id="saveBtn" hidden>Save as .txt</button>
+      </div>
+      <div class="status" id="status" role="status"></div>
+      <ol class="howto">
+        <li>Open <strong>Script Editor</strong> (Applications → Utilities).</li>
+        <li>New document, paste, press <strong>Run ▶</strong>. Or download the script and double-click it.</li>
+        <li>Allow it to control Music if macOS asks. Large playlists take a minute or two; a dialog says when it's done.</li>
+      </ol>
+      <details>
+        <summary>Show the script</summary>
+        <textarea id="scriptOut" readonly aria-label="AppleScript"></textarea>
+      </details>
+    </aside>
+  </div>
+</div>
+<div class="drop-hint" id="dropHint" hidden>Drop Library.xml to load it</div>
+
+<script>
+(function () {
+  // ---------- sample library (examples only) ----------
+  const SAMPLE = [
+    ["Radiohead", "OK Computer", 1997, ["Airbag",284,"Paranoid Android",383,"Subterranean Homesick Alien",267,"Exit Music (For a Film)",264,"Let Down",299,"Karma Police",261,"No Surprises",229,"Lucky",259]],
+    ["Radiohead", "In Rainbows", 2007, ["15 Step",237,"Bodysnatchers",242,"Nude",255,"Weird Fishes/Arpeggi",318,"Reckoner",290,"House of Cards",328,"Videotape",279]],
+    ["Joni Mitchell", "Blue", 1971, ["All I Want",213,"My Old Man",214,"Little Green",205,"Carey",183,"Blue",184,"California",231,"A Case of You",262,"River",244]],
+    ["Miles Davis", "Kind of Blue", 1959, ["So What",562,"Freddie Freeloader",586,"Blue in Green",337,"All Blues",693,"Flamenco Sketches",566]],
+    ["Talking Heads", "Remain in Light", 1980, ["Born Under Punches",346,"Crosseyed and Painless",286,"The Great Curve",386,"Once in a Lifetime",259,"Houses in Motion",270]],
+    ["Talking Heads", "Speaking in Tongues", 1983, ["Burning Down the House",240,"Making Flippy Floppy",276,"Girlfriend Is Better",345,"This Must Be the Place",296]],
+    ["Fleetwood Mac", "Rumours", 1977, ["Second Hand News",163,"Dreams",257,"Never Going Back Again",134,"Don't Stop",193,"Go Your Own Way",218,"The Chain",270,"Songbird",200]],
+    ["Nina Simone", "Wild Is the Wind", 1966, ["I Love Your Lovin' Ways",140,"Four Women",246,"Lilac Wine",233,"Wild Is the Wind",420]]
+  ];
+  function sampleLibrary() {
+    const tracks = []; let id = 1;
+    for (const [artist, album, year, list] of SAMPLE) {
+      for (let i = 0; i < list.length; i += 2) {
+        tracks.push({ id: String(id), pid: "SAMPLE" + String(id).padStart(10, "0"), name: list[i], artist, albumArtist: "", album, year, disc: 1, num: i / 2 + 1, ms: list[i + 1] * 1000 });
+        id++;
+      }
+    }
+    const picks = ["Karma Police","Reckoner","A Case of You","So What","This Must Be the Place","Dreams"];
+    const pl = { name: "Sunday Morning (sample)", ids: tracks.filter(t => picks.includes(t.name)).map(t => t.id) };
+    return { tracks, playlists: [pl], sample: true };
+  }
+
+  // ---------- plist parsing ----------
+  function plistValue(el) {
+    switch (el.tagName) {
+      case "dict": {
+        const o = {}; const kids = el.children;
+        for (let i = 0; i + 1 < kids.length; i += 2) o[kids[i].textContent] = plistValue(kids[i + 1]);
+        return o;
+      }
+      case "array": return Array.from(el.children, plistValue);
+      case "integer": case "real": return Number(el.textContent);
+      case "true": return true;
+      case "false": return false;
+      default: return el.textContent;
+    }
+  }
+  function parseLibrary(text) {
+    const doc = new DOMParser().parseFromString(text, "application/xml");
+    if (doc.querySelector("parsererror")) throw new Error("That file isn't valid XML.");
+    const root = doc.querySelector("plist > dict");
+    if (!root) throw new Error("That doesn't look like a Music library export.");
+    const lib = plistValue(root);
+    if (!lib.Tracks) throw new Error("No songs found. Export with File → Library → Export Library… in Music.");
+    const tracks = [];
+    for (const k in lib.Tracks) {
+      const t = lib.Tracks[k];
+      if (t.Podcast || t.Movie || t["TV Show"] || t["Music Video"] || /audiobook|book/i.test(t.Kind || "")) continue;
+      if (!t["Persistent ID"]) continue;
+      tracks.push({
+        id: String(t["Track ID"]), pid: t["Persistent ID"], name: t.Name || "Untitled",
+        artist: t.Artist || "", albumArtist: t["Album Artist"] || "", album: t.Album || "",
+        sortArtist: t["Sort Album Artist"] || t["Sort Artist"] || "", sortAlbum: t["Sort Album"] || "",
+        year: t.Year || 0, disc: t["Disc Number"] || 1, num: t["Track Number"] || 0, ms: t["Total Time"] || 0
+      });
+    }
+    const valid = new Set(tracks.map(t => t.id));
+    const playlists = (lib.Playlists || [])
+      .filter(p => !p.Master && !p["Distinguished Kind"] && !p.Folder && p["Playlist Items"])
+      .map(p => ({ name: p.Name, ids: p["Playlist Items"].map(i => String(i["Track ID"])).filter(id => valid.has(id)) }))
+      .filter(p => p.ids.length);
+    return { tracks, playlists, sample: false };
+  }
+
+  // ---------- state ----------
+  let library = sampleLibrary();
+  let artists = [];             // [{name, albums:[{name, year, tracks, ids}], ids}]
+  let trackById = new Map();
+  const selected = new Set();
+  const openArtists = new Set(); // artist names
+  const openAlbums = new Set();  // "artist\u0000album"
+  let boxes = [];                // rendered checkboxes: {el, ids, chip, row}
+
+  const $ = id => document.getElementById(id);
+  const sortKey = s => s.toLowerCase().replace(/^the\s+/, "");
+  const fmtTime = ms => { const s = Math.round(ms / 1000); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), ss = s % 60; return h ? `${h}:${String(m).padStart(2,"0")}:${String(ss).padStart(2,"0")}` : `${m}:${String(ss).padStart(2,"0")}`; };
+  const fmtLong = ms => { const m = Math.round(ms / 60000); return m >= 60 ? `${Math.floor(m/60)} hr ${m%60} min` : `${m} min`; };
+
+  function buildTree() {
+    const byAA = $("byAlbumArtist").checked;
+    trackById = new Map(library.tracks.map(t => [t.id, t]));
+    const map = new Map();
+    for (const t of library.tracks) {
+      const a = (byAA && t.albumArtist) || t.artist || t.albumArtist || "Unknown Artist";
+      if (!map.has(a)) map.set(a, { name: a, sort: sortKey(t.sortArtist || a), albums: new Map() });
+      const art = map.get(a);
+      const al = t.album || "Unknown Album";
+      if (!art.albums.has(al)) art.albums.set(al, { name: al, sort: sortKey(t.sortAlbum || al), year: 0, tracks: [] });
+      const alb = art.albums.get(al);
+      alb.tracks.push(t); if (t.year > alb.year) alb.year = t.year;
+    }
+    artists = [...map.values()].sort((x, y) => x.sort.localeCompare(y.sort)).map(a => {
+      const albums = [...a.albums.values()].sort((x, y) => (x.year || 9999) - (y.year || 9999) || x.sort.localeCompare(y.sort));
+      for (const al of albums) { al.tracks.sort((x, y) => x.disc - y.disc || x.num - y.num || x.name.localeCompare(y.name)); al.ids = al.tracks.map(t => t.id); }
+      return { name: a.name, albums, ids: albums.flatMap(al => al.ids) };
+    });
+  }
+
+  // ---------- rendering ----------
+  const CARET = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  function makeRow(cls, label, ids, opts) {
+    const row = document.createElement("div");
+    row.className = "row " + cls; row.setAttribute("role", "treeitem");
+    let caret = null;
+    if (opts.expandable) {
+      caret = document.createElement("button");
+      caret.type = "button"; caret.className = "caret"; caret.innerHTML = CARET;
+      caret.setAttribute("aria-expanded", String(opts.open)); caret.setAttribute("aria-label", (opts.open ? "Collapse " : "Expand ") + label);
+      row.appendChild(caret);
+    }
+    if (opts.num != null) { const n = document.createElement("span"); n.className = "num"; n.textContent = opts.num || ""; row.appendChild(n); }
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.setAttribute("aria-label", label);
+    cb.addEventListener("change", () => { const on = cb.checked; ids.forEach(id => on ? selected.add(id) : selected.delete(id)); refresh(); });
+    row.appendChild(cb);
+    const nm = document.createElement("span"); nm.className = "name"; nm.textContent = label; nm.title = label;
+    nm.addEventListener("click", () => caret ? caret.click() : cb.click());
+    row.appendChild(nm);
+    let chip = null;
+    if (opts.expandable) { chip = document.createElement("span"); chip.className = "chip"; row.appendChild(chip); }
+    if (opts.meta) { const m = document.createElement("span"); m.className = "meta"; m.textContent = opts.meta; row.appendChild(m); }
+    boxes.push({ el: cb, ids, chip, row, track: !opts.expandable });
+    return { row, caret };
+  }
+
+  function render() {
+    const q = $("search").value.trim().toLowerCase();
+    const onlyChecked = $("onlyChecked").checked;
+    const tree = $("tree");
+    tree.textContent = ""; boxes = [];
+    const frag = document.createDocumentFragment();
+
+    // Filter: decide which albums/tracks are visible per artist.
+    const view = [];
+    let matchedTracks = 0;
+    for (const a of artists) {
+      const aHit = !q || a.name.toLowerCase().includes(q);
+      const albums = [];
+      for (const al of a.albums) {
+        const alHit = aHit || al.name.toLowerCase().includes(q);
+        let tracks = alHit ? al.tracks : al.tracks.filter(t => t.name.toLowerCase().includes(q));
+        if (onlyChecked) tracks = tracks.filter(t => selected.has(t.id));
+        if (tracks.length) { albums.push({ al, tracks }); matchedTracks += tracks.length; }
+      }
+      if (albums.length) view.push({ a, albums });
+    }
+    const autoOpen = (q || onlyChecked) && matchedTracks <= 600;
+
+    if (!view.length) {
+      const e = document.createElement("div"); e.className = "empty";
+      e.textContent = q ? `Nothing matches “${$("search").value.trim()}”.` : onlyChecked ? "No songs ticked yet." : "No songs in this library.";
+      frag.appendChild(e);
+    }
+    for (const { a, albums } of view) {
+      const aOpen = autoOpen || openArtists.has(a.name);
+      const songs = a.ids.length;
+      const { row, caret } = makeRow("artist", a.name, a.ids, { expandable: true, open: aOpen, meta: `${a.albums.length} album${a.albums.length > 1 ? "s" : ""} · ${songs}` });
+      const kids = document.createElement("div"); kids.setAttribute("role", "group");
+      frag.appendChild(row); frag.appendChild(kids);
+      const fillArtist = () => {
+        for (const { al, tracks } of albums) {
+          const key = a.name + "\u0000" + al.name;
+          const alOpen = autoOpen || openAlbums.has(key);
+          const r = makeRow("album", al.name, al.ids, { expandable: true, open: alOpen, meta: `${al.year || "—"} · ${al.ids.length}` });
+          const tk = document.createElement("div"); tk.setAttribute("role", "group");
+          kids.appendChild(r.row); kids.appendChild(tk);
+          const fillAlbum = () => {
+            const multiDisc = al.tracks.some(t => t.disc > 1);
+            for (const t of tracks) tk.appendChild(makeRow("track", t.name, [t.id], { num: t.num ? (multiDisc ? `${t.disc}-${t.num}` : t.num) : "", meta: fmtTime(t.ms) }).row);
+          };
+          if (alOpen) fillAlbum();
+          r.caret.addEventListener("click", () => {
+            const open = r.caret.getAttribute("aria-expanded") !== "true";
+            open ? openAlbums.add(key) : openAlbums.delete(key);
+            r.caret.setAttribute("aria-expanded", String(open));
+            if (open) { fillAlbum(); refresh(); } else { pruneBoxes(tk); tk.textContent = ""; }
+          });
+        }
+      };
+      if (aOpen) fillArtist();
+      caret.addEventListener("click", () => {
+        const open = caret.getAttribute("aria-expanded") !== "true";
+        open ? openArtists.add(a.name) : openArtists.delete(a.name);
+        caret.setAttribute("aria-expanded", String(open));
+        if (open) { fillArtist(); refresh(); } else { pruneBoxes(kids); kids.textContent = ""; }
+      });
+    }
+    tree.appendChild(frag);
+    refresh();
+  }
+  function pruneBoxes(container) { boxes = boxes.filter(b => !container.contains(b.row)); }
+
+  function refresh() {
+    for (const b of boxes) {
+      let n = 0; for (const id of b.ids) if (selected.has(id)) n++;
+      b.el.checked = n > 0 && n === b.ids.length;
+      b.el.indeterminate = n > 0 && n < b.ids.length;
+      if (b.chip) { b.chip.textContent = n ? `${n} ticked` : ""; n ? b.chip.removeAttribute("data-none") : b.chip.setAttribute("data-none", ""); }
+      if (b.track) b.row.classList.toggle("off", n === 0);
+    }
+    let ms = 0; const albums = new Set();
+    for (const id of selected) { const t = trackById.get(id); if (t) { ms += t.ms; albums.add(t.album + "\u0000" + (t.albumArtist || t.artist)); } }
+    $("statSongs").textContent = selected.size.toLocaleString();
+    $("statAlbums").textContent = albums.size.toLocaleString();
+    $("statTime").textContent = selected.size ? fmtLong(ms) : "0 min";
+    $("copyBtn").disabled = !selected.size; $("saveBtn").disabled = !selected.size;
+    $("scriptOut").value = selected.size ? buildScript() : "";
+  }
+
+  // ---------- AppleScript ----------
+  function orderedSelection() { const out = []; for (const a of artists) for (const id of a.ids) if (selected.has(id)) out.push(trackById.get(id).pid); return out; }
+  function asString(s) { return '"' + s.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"'; }
+  function buildScript() {
+    const name = $("plName").value.trim() || "My Picks";
+    const replace = $("replace").checked;
+    const pids = orderedSelection();
+    return `-- Made with Crate Playlist Builder: ${pids.length} songs
+set plName to ${asString(name)}
+set idText to "${pids.join(",")}"
+set AppleScript's text item delimiters to ","
+set pids to text items of idText
+set AppleScript's text item delimiters to ""
+set added to 0
+set missing to 0
+tell application "Music"
+	with timeout of 3600 seconds
+		${replace
+          ? `if exists user playlist plName then
+			set pl to user playlist plName
+			delete every track of pl
+		else
+			set pl to make new user playlist with properties {name:plName}
+		end if`
+          : `set pl to make new user playlist with properties {name:plName}`}
+		repeat with pid in pids
+			try
+				duplicate (first track of library playlist 1 whose persistent ID is (contents of pid)) to pl
+				set added to added + 1
+			on error
+				set missing to missing + 1
+			end try
+		end repeat
+	end timeout
+	set msg to "Added " & added & " songs to \\"" & plName & "\\"."
+	if missing > 0 then set msg to msg & return & missing & " songs weren't found in your library."
+	display dialog msg buttons {"OK"} default button 1
+end tell
+`;
+  }
+
+  // ---------- output ----------
+  const status = msg => { $("status").textContent = msg; };
+  $("copyBtn").addEventListener("click", () => {
+    const text = buildScript();
+    const fallback = () => { const d = document.querySelector("details"); d.open = true; const ta = $("scriptOut"); ta.focus(); ta.select(); status("Copying was blocked here. The script is selected below: press ⌘C."); };
+    try {
+      navigator.clipboard.writeText(text).then(
+        () => status(library.sample ? "Copied. This is the sample library, so the script won't find these songs in Music." : "Copied. Paste it into Script Editor and press Run."),
+        fallback);
+    } catch (e) { fallback(); }
+  });
+  // Standalone site: offer the script as a .applescript file, which opens straight in Script Editor.
+  $("saveBtn").textContent = "Download script";
+  $("saveBtn").hidden = false;
+  $("saveBtn").addEventListener("click", () => {
+    const base = ($("plName").value.trim() || "My Picks").replace(/[\/\\:*?"<>|]/g, "-");
+    const url = URL.createObjectURL(new Blob([buildScript()], { type: "text/plain" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = base + ".applescript";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    status("Downloaded. Double-click it to open in Script Editor, then press Run.");
+  });
+  $("plName").addEventListener("input", refresh);
+  $("replace").addEventListener("change", refresh);
+
+  // ---------- controls ----------
+  let searchTimer;
+  $("search").addEventListener("input", () => { clearTimeout(searchTimer); searchTimer = setTimeout(render, 160); });
+  $("onlyChecked").addEventListener("change", render);
+  $("byAlbumArtist").addEventListener("change", () => { openArtists.clear(); openAlbums.clear(); buildTree(); render(); });
+  $("expandAll").addEventListener("click", () => {
+    for (const a of artists) { openArtists.add(a.name); if (artists.length <= 60) for (const al of a.albums) openAlbums.add(a.name + "\u0000" + al.name); }
+    render();
+  });
+  $("collapseAll").addEventListener("click", () => { openArtists.clear(); openAlbums.clear(); render(); });
+  $("selAll").addEventListener("click", () => { library.tracks.forEach(t => selected.add(t.id)); refresh(); if ($("onlyChecked").checked) render(); });
+  $("selNone").addEventListener("click", () => { selected.clear(); refresh(); if ($("onlyChecked").checked) render(); });
+  $("fromPlaylist").addEventListener("change", e => {
+    const p = library.playlists[Number(e.target.value)];
+    if (!p) return;
+    selected.clear(); p.ids.forEach(id => selected.add(id));
+    $("plName").value = p.name;
+    status(`Ticked the ${p.ids.length} songs from “${p.name}”. Keep the name to update that playlist.`);
+    e.target.value = "";
+    render();
+  });
+  function fillPlaylists() {
+    const sel = $("fromPlaylist");
+    sel.length = 1;
+    library.playlists.forEach((p, i) => { const o = document.createElement("option"); o.value = i; o.textContent = `${p.name} (${p.ids.length})`; sel.appendChild(o); });
+    sel.disabled = !library.playlists.length;
+  }
+
+  // ---------- loading ----------
+  function loadLibrary(lib, fileName) {
+    library = lib; selected.clear(); openArtists.clear(); openAlbums.clear();
+    if (lib.sample) {
+      ["Karma Police","Reckoner","A Case of You","So What","This Must Be the Place","Dreams","Go Your Own Way"].forEach(n => { const t = lib.tracks.find(x => x.name === n); if (t) selected.add(t.id); });
+      openArtists.add("Radiohead"); openAlbums.add("Radiohead\u0000OK Computer");
+    }
+    buildTree(); fillPlaylists(); render();
+    if (!lib.sample) {
+      $("bannerText").textContent = `Loaded ${fileName}: ${lib.tracks.length.toLocaleString()} songs by ${artists.length.toLocaleString()} artists, ${lib.playlists.length} playlists.`;
+      $("banner").hidden = false;
+      $("plName").value = "My Picks";
+      status("");
+    }
+  }
+  function readFile(file) {
+    if (!file) return;
+    $("bannerText").textContent = `Reading ${file.name}…`; $("banner").hidden = false;
+    const r = new FileReader();
+    r.onload = () => {
+      setTimeout(() => {
+        try { loadLibrary(parseLibrary(r.result), file.name); }
+        catch (err) { $("bannerText").textContent = err.message; }
+      }, 20);
+    };
+    r.onerror = () => { $("bannerText").textContent = "Couldn't read that file. Try exporting it again."; };
+    r.readAsText(file);
+  }
+  $("loadBtn").addEventListener("click", () => $("file").click());
+  $("file").addEventListener("change", e => { readFile(e.target.files[0]); e.target.value = ""; });
+  let dragDepth = 0;
+  document.addEventListener("dragenter", e => { if (e.dataTransfer && [...e.dataTransfer.types].includes("Files")) { dragDepth++; $("dropHint").hidden = false; } });
+  document.addEventListener("dragleave", () => { dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) $("dropHint").hidden = true; });
+  document.addEventListener("dragover", e => e.preventDefault());
+  document.addEventListener("drop", e => { e.preventDefault(); dragDepth = 0; $("dropHint").hidden = true; readFile(e.dataTransfer.files[0]); });
+
+  loadLibrary(library);
+})();
+</script>
+</body>
+</html>
