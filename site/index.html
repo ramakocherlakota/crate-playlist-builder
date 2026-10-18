@@ -119,8 +119,8 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
       <p class="sub">Browse your Apple Music library as Artist → Album → Song, tick what you want, and build a playlist from it.</p>
     </div>
     <div class="btns">
-      <input type="file" id="file" accept=".xml,text/xml,application/xml" class="sr">
-      <button class="primary" id="loadBtn" type="button">Load Library.xml</button>
+      <input type="file" id="file" class="sr">
+      <button class="primary" id="loadBtn" type="button">Load library file</button>
     </div>
   </header>
 
@@ -132,7 +132,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
   </ol>
 
   <div class="banner" id="banner">
-    <span id="bannerText"><strong>Sample library.</strong> These songs are examples to show how it works. Load your own Library.xml to see your music.</span>
+    <span id="bannerText"><strong>Sample library.</strong> These songs are examples to show how it works. Load your exported library (.xml) to see your music.</span>
   </div>
 
   <div class="main">
@@ -182,7 +182,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
     </aside>
   </div>
 </div>
-<div class="drop-hint" id="dropHint" hidden>Drop Library.xml to load it</div>
+<div class="drop-hint" id="dropHint" hidden>Drop your library .xml to load it</div>
 
 <script>
 (function () {
@@ -226,6 +226,9 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
     }
   }
   function parseLibrary(text) {
+    // Music exports can carry control characters (raw or as &#x..; entities) that XML 1.0 forbids.
+    text = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "")
+               .replace(/&#(?:x0*(?:[0-8bcef]|1[0-9a-f])|0*(?:[0-8]|1[124-9]|2[0-9]|3[01]));/gi, "");
     const doc = new DOMParser().parseFromString(text, "application/xml");
     if (doc.querySelector("parsererror")) throw new Error("That file isn't valid XML.");
     const root = doc.querySelector("plist > dict");
@@ -509,6 +512,7 @@ end tell
   }
   function readFile(file) {
     if (!file) return;
+    if (!/\.xml$/i.test(file.name)) { $("bannerText").textContent = `${file.name} isn't an XML file. In Music, use File → Library → Export Library… and load the .xml it saves.`; $("banner").hidden = false; return; }
     $("bannerText").textContent = `Reading ${file.name}…`; $("banner").hidden = false;
     const r = new FileReader();
     r.onload = () => {
