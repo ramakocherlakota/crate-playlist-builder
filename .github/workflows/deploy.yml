@@ -20,14 +20,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Prints the identity GitHub presents to AWS (not the token itself), to debug role trust.
-      - name: Show OIDC subject
-        run: |
-          TOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value)
-          CLAIMS=$(python3 -c 'import sys,base64,json; p=sys.argv[1].split(".")[1]; c=json.loads(base64.urlsafe_b64decode(p+"="*(-len(p)%4))); print(json.dumps({k:c.get(k) for k in ("sub","aud","iss")}))' "$TOKEN")
-          echo "::notice title=OIDC claims::$CLAIMS"
-
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}

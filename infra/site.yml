@@ -11,10 +11,12 @@ Parameters:
   HostedZoneId:
     Type: AWS::Route53::HostedZone::Id
     Description: Route 53 hosted zone ID for ramakocherlakota.net
-  GitHubRepo:
+  GitHubSubjectPrefix:
     Type: String
-    Default: ramakocherlakota/crate-playlist-builder
-    Description: owner/repo allowed to deploy
+    Default: repo:ramakocherlakota@9009159/crate-playlist-builder@1424578460
+    Description: >
+      Start of the OIDC "sub" claim GitHub sends for this repo (owner@ownerId/repo@repoId).
+      Only runs on main of this repo may deploy.
   CreateOidcProvider:
     Type: String
     AllowedValues: ["true", "false"]
@@ -133,7 +135,7 @@ Resources:
             Condition:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
-                token.actions.githubusercontent.com:sub: !Sub "repo:${GitHubRepo}:ref:refs/heads/main"
+                token.actions.githubusercontent.com:sub: !Sub "${GitHubSubjectPrefix}:ref:refs/heads/main"
       Policies:
         - PolicyName: deploy-site
           PolicyDocument:
