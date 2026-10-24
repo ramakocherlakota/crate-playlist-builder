@@ -158,13 +158,14 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
 
   <ol class="steps">
     <li><b>1</b><span>In Music on your Mac: <kbd>File → Library → Export Library…</kbd> and save the XML.</span></li>
-    <li><b>2</b><span>Load that file here, or drag it onto this page. It stays in your browser and isn't uploaded.</span></li>
+    <li><b>2</b><span>Load that file here, or drag it onto this page. It stays in your browser, isn't uploaded, and is remembered here along with your edits.</span></li>
     <li><b>3</b><span>Tick artists, albums or songs. Optionally start from one of your existing playlists.</span></li>
     <li><b>4</b><span>Copy the script, paste it into <kbd>Script Editor</kbd>, and press Run.</span></li>
   </ol>
 
   <div class="banner" id="banner">
     <span id="bannerText"><strong>Sample library.</strong> These songs are examples to show how it works. Load your exported library (.xml) to see your music.</span>
+    <button type="button" id="forgetBtn" hidden>Forget this library</button>
   </div>
 
   <div class="main">
@@ -536,6 +537,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
     $("copyBtn").textContent = any && drafts.filter(changed).length > 1 ? `Copy script (${drafts.filter(changed).length} playlists)` : "Copy script";
     $("scriptOut").value = any ? buildScript() : "";
     renderDrafts();
+    scheduleSave();
   }
 
   // ---------- playlists being edited ----------
@@ -708,8 +710,70 @@ display dialog "Done." & return & return & reportText buttons {"OK"} default but
     sel.options[0].textContent = library.playlists.length ? "Edit an existing playlist…" : "No playlists in this file (use Export Library)";
   }
 
+  // ---------- remembering the library and edits (IndexedDB, this browser only) ----------
+  const store = (() => {
+    let dbp = null;
+    const db = () => dbp || (dbp = new Promise((resolve, reject) => {
+      const r = indexedDB.open("crate-playlist-builder", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("kv");
+      r.onsuccess = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+    }));
+    const run = (mode, fn) => db().then(d => new Promise((resolve, reject) => {
+      const tx = d.transaction("kv", mode); const req = fn(tx.objectStore("kv"));
+      tx.oncomplete = () => resolve(req && req.result); tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error);
+    }));
+    return {
+      get: k => run("readonly", s => s.get(k)).catch(() => undefined),
+      set: (k, v) => run("readwrite", s => s.put(v, k)).catch(() => false),
+      del: k => run("readwrite", s => s.delete(k)).catch(() => false),
+    };
+  })();
+  let saving = false;  // off until the saved edits for the current library have been restored
+  let saveTimer;
+  function scheduleSave() {
+    if (!saving || library.sample) return;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      const pidOf = id => trackById.get(id)?.pid;
+      store.set("drafts", {
+        active,
+        drafts: drafts.map(d => ({
+          name: d.name, origName: d.origName,
+          pids: [...d.ids].map(pidOf).filter(Boolean),
+          origPids: d.orig ? [...d.orig].map(pidOf).filter(Boolean) : null,
+        })),
+      });
+    }, 300);
+  }
+  // Saved edits are keyed by persistent ID, so they carry over to a newer export of the library.
+  async function restoreDrafts() {
+    const saved = await store.get("drafts");
+    if (!saved || !saved.drafts || !saved.drafts.length) return 0;
+    const idOf = new Map(library.tracks.map(t => [t.pid, t.id]));
+    let missing = 0;
+    const toIds = pids => new Set(pids.map(p => idOf.get(p) || (missing++, null)).filter(Boolean));
+    drafts = saved.drafts.map(d => {
+      const ids = toIds(d.pids);
+      let orig = null;
+      if (d.origName != null) {
+        // Compare against the playlist as it is in this file, so a re-export after running the script shows no changes.
+        const pl = library.playlists.find(p => p.name === d.origName);
+        orig = pl ? new Set(pl.ids) : new Set((d.origPids || []).map(p => idOf.get(p)).filter(Boolean));
+      }
+      return { name: d.name, ids, orig, origName: d.origName };
+    });
+    active = Math.min(Math.max(0, saved.active || 0), drafts.length - 1);
+    selected = drafts[active].ids; $("plName").value = drafts[active].name;
+    render();
+    const n = drafts.length;
+    status(`Restored ${n} playlist${n === 1 ? "" : "s"} you were editing.` + (missing ? ` ${missing} song${missing === 1 ? " isn't" : "s aren't"} in this library file and ${missing === 1 ? "was" : "were"} left out.` : ""));
+    return n;
+  }
+
   // ---------- loading ----------
-  function loadLibrary(lib, fileName) {
+  function loadLibrary(lib, fileName, opts = {}) {
+    saving = false;
     library = lib; openArtists.clear(); openAlbums.clear();
     drafts = [{ name: "My Picks", ids: new Set(), orig: null, origName: null }];
     if (lib.sample) {
@@ -718,12 +782,27 @@ display dialog "Done." & return & return & reportText buttons {"OK"} default but
     }
     active = 0; selected = drafts[0].ids; $("plName").value = drafts[0].name;
     buildTree(); fillPlaylists(); render();
-    if (!lib.sample) {
-      $("bannerText").textContent = `Loaded ${fileName}: ${lib.tracks.length.toLocaleString()} songs by ${artists.length.toLocaleString()} artists, ${lib.playlists.length} playlists.`;
-      $("banner").hidden = false;
-      status("");
-    }
+    $("forgetBtn").hidden = !!lib.sample;
+    if (lib.sample) return;
+    const when = new Date(lib.loadedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    $("bannerText").textContent = `${opts.restored ? `Remembered from ${when}` : "Loaded"}: ${fileName}, ${lib.tracks.length.toLocaleString()} songs by ${artists.length.toLocaleString()} artists, ${lib.playlists.length} playlist${lib.playlists.length === 1 ? "" : "s"}.`;
+    $("banner").hidden = false;
+    status("");
+    if (!opts.restored) store.set("library", { fileName, loadedAt: lib.loadedAt, tracks: lib.tracks, playlists: lib.playlists });
+    restoreDrafts().finally(() => { saving = true; scheduleSave(); });
   }
+  $("forgetBtn").addEventListener("click", async () => {
+    if (!$("forgetBtn").dataset.confirm) {
+      $("forgetBtn").dataset.confirm = "1"; $("forgetBtn").textContent = "Forget library and all edits?";
+      setTimeout(() => { delete $("forgetBtn").dataset.confirm; $("forgetBtn").textContent = "Forget this library"; }, 4000);
+      return;
+    }
+    saving = false; clearTimeout(saveTimer);
+    await Promise.all([store.del("library"), store.del("drafts")]);
+    delete $("forgetBtn").dataset.confirm; $("forgetBtn").textContent = "Forget this library";
+    $("bannerText").innerHTML = "<strong>Sample library.</strong> Your library and edits were removed from this browser. Load your exported library (.xml) to start again.";
+    loadLibrary(sampleLibrary());
+  });
   function readFile(file) {
     if (!file) return;
     if (!/\.xml$/i.test(file.name)) { $("bannerText").textContent = `${file.name} isn't an XML file. In Music, use File → Library → Export Library… and load the .xml it saves.`; $("banner").hidden = false; return; }
@@ -731,7 +810,7 @@ display dialog "Done." & return & return & reportText buttons {"OK"} default but
     const r = new FileReader();
     r.onload = () => {
       setTimeout(() => {
-        try { loadLibrary(parseLibrary(r.result), file.name); }
+        try { const lib = parseLibrary(r.result); lib.loadedAt = Date.now(); loadLibrary(lib, file.name); }
         catch (err) { $("bannerText").textContent = err.message; }
       }, 20);
     };
@@ -755,6 +834,9 @@ display dialog "Done." & return & return & reportText buttons {"OK"} default but
   document.addEventListener("drop", e => { e.preventDefault(); hideDrop(); readFile(e.dataTransfer.files[0]); });
 
   loadLibrary(library);
+  store.get("library").then(saved => {
+    if (saved && saved.tracks && library.sample) loadLibrary({ tracks: saved.tracks, playlists: saved.playlists || [], loadedAt: saved.loadedAt, sample: false }, saved.fileName, { restored: true });
+  });
 })();
 </script>
 </body>
