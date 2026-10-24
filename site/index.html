@@ -88,6 +88,24 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .track { padding-left: 100px; font-size: 14px; }
 .track .num { width: 2.6em; text-align: right; color: var(--muted); font-family: var(--font-mono); font-size: 12px; flex: none; font-variant-numeric: tabular-nums; }
 .track.off .name { color: var(--muted); }
+.play { width: 26px; height: 26px; flex: none; padding: 0; display: grid; place-items: center; border-radius: 50%; color: var(--accent); background: var(--surface); }
+.play svg { display: block; }
+.play[data-state="playing"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.play[data-state="none"] { opacity: .4; }
+.play[data-state="loading"] svg { animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .play[data-state="loading"] svg { animation: none; } }
+.now {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; background: var(--surface); border-top: 1px solid var(--line);
+  box-shadow: 0 -4px 16px color-mix(in srgb, var(--fg) 8%, transparent);
+  padding: 10px max(16px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+}
+.now-inner { max-width: 1180px; margin: 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.now-text { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; }
+.now-text strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.now-text span { font-size: 12.5px; color: var(--muted); }
+.now a { color: var(--accent); font-size: 14px; font-weight: 500; }
+body.has-now { padding-bottom: 110px; }
 @media (max-width: 520px) { .album { padding-left: 30px; } .track { padding-left: 52px; } .artist .meta, .album .meta { display: none; } }
 .empty { padding: 32px 16px; color: var(--muted); text-align: center; }
 
@@ -181,6 +199,13 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
         <textarea id="scriptOut" readonly aria-label="AppleScript"></textarea>
       </details>
     </aside>
+  </div>
+</div>
+<div class="now" id="now" hidden>
+  <div class="now-inner">
+    <div class="now-text"><strong id="nowTitle"></strong><span id="nowSub"></span></div>
+    <a id="nowLink" href="https://music.apple.com" target="_blank" rel="noopener">Open in Apple Music</a>
+    <button type="button" id="nowStop">Stop</button>
   </div>
 </div>
 <div class="drop-hint" id="dropHint" hidden>Drop your library .xml to load it</div>
@@ -290,6 +315,93 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
     });
   }
 
+  // ---------- previews (30-second clips from the iTunes Search API) ----------
+  const ICON_PLAY = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.5v9l7.5-4.5z" fill="currentColor"/></svg>';
+  const ICON_PAUSE = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 1.5h2.5v9H2.5zM7 1.5h2.5v9H7z" fill="currentColor"/></svg>';
+  const ICON_LOAD = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M7 1.5a5.5 5.5 0 1 1-5.5 5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+  const COUNTRY = ((navigator.language || "en-US").split("-")[1] || "US").toUpperCase();
+  const audio = new Audio();
+  const previewCache = new Map(); // track id -> preview, or null when Apple has none
+  let current = null;             // id of the track loading or playing
+  let loading = false;
+
+  function paintPlay(b, state) {
+    b.dataset.state = state;
+    b.innerHTML = state === "playing" ? ICON_PAUSE : state === "loading" ? ICON_LOAD : ICON_PLAY;
+    const what = b.dataset.name;
+    b.setAttribute("aria-label", state === "playing" ? `Pause ${what}` : `Play preview of ${what}`);
+    b.title = state === "none" ? "No preview found" : state === "playing" ? "Pause" : "Play 30-second preview";
+  }
+  function setPlayState(id, state) { document.querySelectorAll(`.play[data-id="${CSS.escape(id)}"]`).forEach(b => paintPlay(b, state)); }
+  function makePlayButton(t) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "play"; b.dataset.id = t.id; b.dataset.name = t.name;
+    paintPlay(b, t.id === current ? (loading ? "loading" : audio.paused ? "idle" : "playing") : previewCache.get(t.id) === null ? "none" : "idle");
+    b.addEventListener("click", () => togglePreview(t));
+    return b;
+  }
+  function jsonp(url) {
+    return new Promise((resolve, reject) => {
+      const cb = "_itunes" + Math.random().toString(36).slice(2);
+      const s = document.createElement("script");
+      const done = () => { clearTimeout(timer); delete window[cb]; s.remove(); };
+      const timer = setTimeout(() => { done(); reject(new Error("timeout")); }, 8000);
+      window[cb] = data => { done(); resolve(data); };
+      s.onerror = () => { done(); reject(new Error("network")); };
+      s.src = url + "&callback=" + cb;
+      document.head.appendChild(s);
+    });
+  }
+  const norm = s => (s || "").toLowerCase().replace(/\(.*?\)|\[.*?\]/g, "").replace(/\s(feat|ft)\..*$/, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  const near = (x, y) => x && y && (x === y || x.includes(y) || y.includes(x));
+  async function findPreview(t) {
+    if (previewCache.has(t.id)) return previewCache.get(t.id);
+    const artist = t.artist || t.albumArtist;
+    const data = await jsonp(`https://itunes.apple.com/search?media=music&entity=song&limit=10&country=${COUNTRY}&term=${encodeURIComponent(artist + " " + t.name)}`);
+    const n = norm(t.name), a = norm(artist), al = norm(t.album);
+    let best = null, bestScore = -1;
+    for (const r of data.results || []) {
+      if (!r.previewUrl) continue;
+      const rn = norm(r.trackName), ra = norm(r.artistName);
+      const score = (rn === n ? 4 : near(rn, n) ? 2 : 0) + (ra === a ? 2 : near(ra, a) ? 1 : 0) + (al && norm(r.collectionName) === al ? 1 : 0);
+      if (score > bestScore) { best = r; bestScore = score; }
+    }
+    const out = best ? { url: best.previewUrl, name: best.trackName, artist: best.artistName, album: best.collectionName, link: best.trackViewUrl, exact: bestScore >= 5 } : null;
+    previewCache.set(t.id, out);
+    return out;
+  }
+  function showNow(title, sub, link) {
+    $("nowTitle").textContent = title; $("nowSub").textContent = sub;
+    $("nowLink").hidden = !link; if (link) $("nowLink").href = link;
+    $("nowStop").hidden = !link;
+    $("now").hidden = false; document.body.classList.add("has-now");
+  }
+  function hideNow() { $("now").hidden = true; document.body.classList.remove("has-now"); }
+  async function togglePreview(t) {
+    if (current === t.id) { audio.paused ? audio.play().catch(() => {}) : audio.pause(); return; }
+    if (current) { const prev = current; current = null; audio.pause(); setPlayState(prev, "idle"); }
+    current = t.id; loading = true; setPlayState(t.id, "loading");
+    try { await startPreview(t); } finally { if (current === t.id) loading = false; }
+  }
+  async function startPreview(t) {
+    let p;
+    try { p = await findPreview(t); }
+    catch (e) {
+      if (current === t.id) { current = null; setPlayState(t.id, "idle"); showNow("Couldn't reach Apple's preview service", "Check your connection and try again.", null); }
+      return;
+    }
+    if (current !== t.id) return; // another song was clicked meanwhile
+    if (!p) { current = null; setPlayState(t.id, "none"); showNow(`No preview found for “${t.name}”`, "Apple doesn't have a clip for this song.", null); return; }
+    audio.src = p.url;
+    try { await audio.play(); }
+    catch (e) { current = null; setPlayState(t.id, "idle"); showNow("Couldn't play the preview", "Your browser blocked playback. Try the button again.", null); return; }
+    showNow(`${p.name} — ${p.artist}`, (p.exact ? "" : "Closest match on Apple Music · ") + `30-second preview · ${p.album}`, p.link);
+  }
+  audio.addEventListener("playing", () => { if (current) setPlayState(current, "playing"); });
+  audio.addEventListener("pause", () => { if (current && !audio.ended) setPlayState(current, "idle"); });
+  audio.addEventListener("ended", () => { if (current) setPlayState(current, "idle"); current = null; hideNow(); });
+  $("nowStop").addEventListener("click", () => { audio.pause(); if (current) setPlayState(current, "idle"); current = null; hideNow(); });
+
   // ---------- rendering ----------
   const CARET = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
@@ -304,6 +416,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
       row.appendChild(caret);
     }
     if (opts.num != null) { const n = document.createElement("span"); n.className = "num"; n.textContent = opts.num || ""; row.appendChild(n); }
+    if (opts.play) row.appendChild(makePlayButton(opts.play));
     const cb = document.createElement("input"); cb.type = "checkbox"; cb.setAttribute("aria-label", label);
     cb.addEventListener("change", () => { const on = cb.checked; ids.forEach(id => on ? selected.add(id) : selected.delete(id)); refresh(); });
     row.appendChild(cb);
@@ -360,7 +473,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
           kids.appendChild(r.row); kids.appendChild(tk);
           const fillAlbum = () => {
             const multiDisc = al.tracks.some(t => t.disc > 1);
-            for (const t of tracks) tk.appendChild(makeRow("track", t.name, [t.id], { num: t.num ? (multiDisc ? `${t.disc}-${t.num}` : t.num) : "", meta: fmtTime(t.ms) }).row);
+            for (const t of tracks) tk.appendChild(makeRow("track", t.name, [t.id], { num: t.num ? (multiDisc ? `${t.disc}-${t.num}` : t.num) : "", meta: fmtTime(t.ms), play: t }).row);
           };
           if (alOpen) fillAlbum();
           r.caret.addEventListener("click", () => {

@@ -8,7 +8,7 @@ Live at **https://crate.ramakocherlakota.net**
 
 1. In Music on a Mac: **File → Library → Export Library…** and save the XML.
 2. Load it on the page (or drag it on). Everything runs in your browser; nothing is uploaded.
-3. Tick artists, albums or songs, or start from an existing playlist.
+3. Tick artists, albums or songs, or start from an existing playlist. Press ▶ next to a song to hear Apple's 30-second preview (looked up through the public iTunes Search API).
 4. Copy or download the generated AppleScript and run it in Script Editor. It finds each song by its persistent ID, so it works for streaming Apple Music songs as well as local files.
 
 The whole app is one static file: [`site/index.html`](site/index.html).
