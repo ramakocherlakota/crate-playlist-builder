@@ -110,6 +110,8 @@ body.has-now { padding-bottom: 110px; }
 .empty { padding: 32px 16px; color: var(--muted); text-align: center; }
 
 aside.panel { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+/* Stacked on phones: let the panel scroll away instead of pinning it over the tree. */
+@media (max-width: 860px) { aside.panel { position: static; } }
 aside h2 { font-family: var(--font-display); font-weight: 600; font-size: 1.2rem; margin: 0; }
 .stat { display: flex; gap: 18px; }
 .stat div { display: flex; flex-direction: column; }
@@ -152,11 +154,12 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
     </div>
     <div class="btns">
       <input type="file" id="file" class="sr">
+      <button type="button" id="helpBtn" aria-expanded="true" aria-controls="steps howto">Hide instructions</button>
       <button class="primary" id="loadBtn" type="button">Load library file</button>
     </div>
   </header>
 
-  <ol class="steps">
+  <ol class="steps" id="steps">
     <li><b>1</b><span>In Music on your Mac: <kbd>File → Library → Export Library…</kbd> and save the XML.</span></li>
     <li><b>2</b><span>Load that file here, or drag it onto this page. It stays in your browser, isn't uploaded, and is remembered here along with your edits.</span></li>
     <li><b>3</b><span>Pick or start playlists on the left, then tick artists, albums or songs on the right. Switch between playlists any time.</span></li>
@@ -193,7 +196,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
         <button type="button" id="saveBtn" hidden>Save as .txt</button>
       </div>
       <div class="status" id="status" role="status"></div>
-      <ol class="howto">
+      <ol class="howto" id="howto">
         <li>Open <strong>Script Editor</strong> (Applications → Utilities).</li>
         <li>New document, paste, press <strong>Run ▶</strong>. Or download the script and double-click it.</li>
         <li>Allow it to control Music if macOS asks. Every playlist with changes is written in one run; large ones take a minute or two, and a dialog lists what was done.</li>
@@ -795,6 +798,22 @@ display dialog "Done." & return & return & reportText buttons {"OK"} default but
     (v.openArtists || []).forEach(n => openArtists.add(n));
     (v.openAlbums || []).forEach(k => openAlbums.add(k));
   }
+
+  // Instructions start hidden on phones; the viewer's choice is remembered.
+  const HELP_KEY = "crate-playlist-builder:help";
+  function setHelp(open) {
+    $("steps").hidden = !open; $("howto").hidden = !open;
+    $("helpBtn").setAttribute("aria-expanded", String(open));
+    $("helpBtn").textContent = open ? "Hide instructions" : "How it works";
+  }
+  let helpPref = null;
+  try { helpPref = localStorage.getItem(HELP_KEY); } catch (e) {}
+  setHelp(helpPref ? helpPref === "open" : !matchMedia("(max-width: 860px)").matches);
+  $("helpBtn").addEventListener("click", () => {
+    const open = $("helpBtn").getAttribute("aria-expanded") !== "true";
+    setHelp(open);
+    try { localStorage.setItem(HELP_KEY, open ? "open" : "closed"); } catch (e) {}
+  });
 
   // ---------- loading ----------
   function loadLibrary(lib, fileName, opts = {}) {
