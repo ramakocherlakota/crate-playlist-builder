@@ -7,7 +7,7 @@ Live at **https://crate.ramakocherlakota.net**
 ## How it works
 
 1. In Music on a Mac: **File → Library → Export Library…** and save the XML.
-2. Load it on the page (or drag it on). Everything runs in your browser; nothing is uploaded. The library and your edits are remembered in this browser (IndexedDB) until you choose **Forget this library**.
+2. Load it on the page (or drag it on). Everything runs in your browser; nothing is uploaded. The library, your edits and your view (search, toggles, open folders) are remembered in this browser (IndexedDB and localStorage) until you choose **Forget this library**.
 3. Tick artists, albums or songs. Open any number of existing playlists (or start new ones) and switch between them; each keeps its own changes. Press ♪ next to a song to hear Apple's 30-second preview (looked up through the public iTunes Search API).
 4. Copy or download the generated AppleScript and run it in Script Editor. One script writes every playlist you changed. It finds each song by its persistent ID, so it works for streaming Apple Music songs as well as local files.
 

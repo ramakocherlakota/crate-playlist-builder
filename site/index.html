@@ -501,7 +501,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
           if (alOpen) fillAlbum();
           r.caret.addEventListener("click", () => {
             const open = r.caret.getAttribute("aria-expanded") !== "true";
-            open ? openAlbums.add(key) : openAlbums.delete(key);
+            open ? openAlbums.add(key) : openAlbums.delete(key); saveView();
             r.caret.setAttribute("aria-expanded", String(open));
             if (open) { fillAlbum(); refresh(); } else { pruneBoxes(tk); tk.textContent = ""; }
           });
@@ -510,7 +510,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
       if (aOpen) fillArtist();
       caret.addEventListener("click", () => {
         const open = caret.getAttribute("aria-expanded") !== "true";
-        open ? openArtists.add(a.name) : openArtists.delete(a.name);
+        open ? openArtists.add(a.name) : openArtists.delete(a.name); saveView();
         caret.setAttribute("aria-expanded", String(open));
         if (open) { fillArtist(); refresh(); } else { pruneBoxes(kids); kids.textContent = ""; }
       });
@@ -539,6 +539,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
     $("scriptOut").value = any ? buildScript() : "";
     renderDrafts();
     scheduleSave();
+    saveView();
   }
 
   // ---------- playlists being edited ----------
@@ -772,10 +773,34 @@ display dialog "Done." & return & return & reportText buttons {"OK"} default but
     return n;
   }
 
+  // View settings (search, toggles, open folders) are small, so they live in localStorage.
+  const VIEW_KEY = "crate-playlist-builder:view";
+  function saveView() {
+    if (library.sample) return;
+    try {
+      localStorage.setItem(VIEW_KEY, JSON.stringify({
+        search: $("search").value, byAlbumArtist: $("byAlbumArtist").checked, onlyChecked: $("onlyChecked").checked,
+        replace: $("replace").checked, openArtists: [...openArtists], openAlbums: [...openAlbums],
+      }));
+    } catch (e) {}
+  }
+  function applySavedView() {
+    let v = null;
+    try { v = JSON.parse(localStorage.getItem(VIEW_KEY) || "null"); } catch (e) {}
+    if (!v) return;
+    $("search").value = v.search || "";
+    $("byAlbumArtist").checked = v.byAlbumArtist !== false;
+    $("onlyChecked").checked = !!v.onlyChecked;
+    $("replace").checked = v.replace !== false;
+    (v.openArtists || []).forEach(n => openArtists.add(n));
+    (v.openAlbums || []).forEach(k => openAlbums.add(k));
+  }
+
   // ---------- loading ----------
   function loadLibrary(lib, fileName, opts = {}) {
     saving = false;
     library = lib; openArtists.clear(); openAlbums.clear();
+    if (!lib.sample) applySavedView();
     drafts = [{ name: "My Picks", ids: new Set(), orig: null, origName: null }];
     if (lib.sample) {
       ["Karma Police","Reckoner","A Case of You","So What","This Must Be the Place","Dreams","Go Your Own Way"].forEach(n => { const t = lib.tracks.find(x => x.name === n); if (t) drafts[0].ids.add(t.id); });
@@ -800,6 +825,8 @@ display dialog "Done." & return & return & reportText buttons {"OK"} default but
     }
     saving = false; clearTimeout(saveTimer);
     await Promise.all([store.del("library"), store.del("drafts")]);
+    try { localStorage.removeItem(VIEW_KEY); } catch (e) {}
+    $("search").value = ""; $("byAlbumArtist").checked = true; $("onlyChecked").checked = false; $("replace").checked = true;
     delete $("forgetBtn").dataset.confirm; $("forgetBtn").textContent = "Forget this library";
     $("bannerText").innerHTML = "<strong>Sample library.</strong> Your library and edits were removed from this browser. Load your exported library (.xml) to start again.";
     loadLibrary(sampleLibrary());
