@@ -68,6 +68,7 @@ button.primary:hover { filter: brightness(1.08); background: var(--accent); }
 button:disabled { opacity: .5; cursor: not-allowed; }
 .toggles { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 13.5px; color: var(--muted); align-items: center; }
 .toggles label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.toggles select { padding: 3px 6px; font-size: 13.5px; }
 
 #tree { max-height: 70vh; overflow-y: auto; padding: 6px 0; }
 @media (max-width: 860px) { #tree { max-height: none; } }
@@ -214,6 +215,8 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
       <div class="toggles">
         <label><input type="checkbox" id="byAlbumArtist" checked> Group by album artist</label>
         <label><input type="checkbox" id="onlyChecked"> Show only ticked</label>
+        <label><input type="checkbox" id="ignoreSort"> Ignore sort names</label>
+        <label>Albums <select id="albumOrder" aria-label="Album order"><option value="az">A–Z</option><option value="year">By year</option></select></label>
         <span style="flex:1"></span>
         <button type="button" id="expandAll">Expand all</button>
         <button type="button" id="collapseAll">Collapse all</button>
@@ -293,7 +296,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
       tracks.push({
         id: String(t["Track ID"]), pid: t["Persistent ID"], name: t.Name || "Untitled",
         artist: t.Artist || "", albumArtist: t["Album Artist"] || "", album: t.Album || "",
-        sortArtist: t["Sort Album Artist"] || t["Sort Artist"] || "", sortAlbum: t["Sort Album"] || "",
+        sortAlbumArtist: t["Sort Album Artist"] || "", sortArtist: t["Sort Artist"] || "", sortAlbum: t["Sort Album"] || "",
         year: t.Year || 0, disc: t["Disc Number"] || 1, num: t["Track Number"] || 0, ms: t["Total Time"] || 0
       });
     }
@@ -321,21 +324,41 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
   const fmtTime = ms => { const s = Math.round(ms / 1000); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), ss = s % 60; return h ? `${h}:${String(m).padStart(2,"0")}:${String(ss).padStart(2,"0")}` : `${m}:${String(ss).padStart(2,"0")}`; };
   const fmtLong = ms => { const m = Math.round(ms / 60000); return m >= 60 ? `${Math.floor(m/60)} hr ${m%60} min` : `${m} min`; };
 
+  // A Music sort name ("Davis, Miles") is used only when every song in the group carries the same one;
+  // otherwise, or with "Ignore sort names" on, the displayed name decides.
+  function agreedSortName(values, fallback) {
+    if ($("ignoreSort").checked) return fallback;
+    const set = new Set(values);
+    return set.size === 1 && !set.has("") ? [...set][0] : fallback;
+  }
   function buildTree() {
     const byAA = $("byAlbumArtist").checked;
+    const byYear = $("albumOrder").value === "year";
     trackById = new Map(library.tracks.map(t => [t.id, t]));
     const map = new Map();
     for (const t of library.tracks) {
-      const a = (byAA && t.albumArtist) || t.artist || t.albumArtist || "Unknown Artist";
-      if (!map.has(a)) map.set(a, { name: a, sort: sortKey(t.sortArtist || a), albums: new Map() });
+      const useAA = byAA && !!t.albumArtist;
+      const a = (useAA && t.albumArtist) || t.artist || t.albumArtist || "Unknown Artist";
+      if (!map.has(a)) map.set(a, { name: a, sortNames: [], albums: new Map() });
       const art = map.get(a);
+      // Libraries saved by an older version only have one combined sort field.
+      art.sortNames.push((useAA ? t.sortAlbumArtist : t.sortArtist) ?? t.sortArtist ?? "");
       const al = t.album || "Unknown Album";
-      if (!art.albums.has(al)) art.albums.set(al, { name: al, sort: sortKey(t.sortAlbum || al), year: 0, tracks: [] });
+      if (!art.albums.has(al)) art.albums.set(al, { name: al, sortNames: [], year: 0, tracks: [] });
       const alb = art.albums.get(al);
-      alb.tracks.push(t); if (t.year > alb.year) alb.year = t.year;
+      alb.tracks.push(t); alb.sortNames.push(t.sortAlbum || "");
+      // Earliest year on the album, so a remaster or reissue sits where the original belongs.
+      if (t.year && (!alb.year || t.year < alb.year)) alb.year = t.year;
     }
-    artists = [...map.values()].sort((x, y) => x.sort.localeCompare(y.sort)).map(a => {
-      const albums = [...a.albums.values()].sort((x, y) => (x.year || 9999) - (y.year || 9999) || x.sort.localeCompare(y.sort));
+    const byName = (x, y) => x.sort.localeCompare(y.sort, undefined, { numeric: true });
+    for (const art of map.values()) {
+      art.sort = sortKey(agreedSortName(art.sortNames, art.name));
+      for (const al of art.albums.values()) al.sort = sortKey(agreedSortName(al.sortNames, al.name));
+    }
+    artists = [...map.values()].sort(byName).map(a => {
+      const albums = [...a.albums.values()].sort(byYear
+        ? (x, y) => (x.year || 9999) - (y.year || 9999) || byName(x, y)
+        : (x, y) => byName(x, y) || (x.year || 9999) - (y.year || 9999));
       for (const al of albums) { al.tracks.sort((x, y) => x.disc - y.disc || x.num - y.num || x.name.localeCompare(y.name)); al.ids = al.tracks.map(t => t.id); }
       return { name: a.name, albums, ids: albums.flatMap(al => al.ids) };
     });
@@ -690,6 +713,8 @@ display dialog "Done." & return & return & reportText buttons {"OK"} default but
   $("search").addEventListener("input", () => { clearTimeout(searchTimer); searchTimer = setTimeout(render, 160); });
   $("onlyChecked").addEventListener("change", render);
   $("byAlbumArtist").addEventListener("change", () => { openArtists.clear(); openAlbums.clear(); buildTree(); render(); });
+  $("ignoreSort").addEventListener("change", () => { buildTree(); render(); });
+  $("albumOrder").addEventListener("change", () => { buildTree(); render(); });
   $("expandAll").addEventListener("click", () => {
     for (const a of artists) { openArtists.add(a.name); if (artists.length <= 60) for (const al of a.albums) openAlbums.add(a.name + "\u0000" + al.name); }
     render();
@@ -783,7 +808,8 @@ display dialog "Done." & return & return & reportText buttons {"OK"} default but
     try {
       localStorage.setItem(VIEW_KEY, JSON.stringify({
         search: $("search").value, byAlbumArtist: $("byAlbumArtist").checked, onlyChecked: $("onlyChecked").checked,
-        replace: $("replace").checked, openArtists: [...openArtists], openAlbums: [...openAlbums],
+        replace: $("replace").checked, ignoreSort: $("ignoreSort").checked, albumOrder: $("albumOrder").value,
+        openArtists: [...openArtists], openAlbums: [...openAlbums],
       }));
     } catch (e) {}
   }
@@ -795,6 +821,8 @@ display dialog "Done." & return & return & reportText buttons {"OK"} default but
     $("byAlbumArtist").checked = v.byAlbumArtist !== false;
     $("onlyChecked").checked = !!v.onlyChecked;
     $("replace").checked = v.replace !== false;
+    $("ignoreSort").checked = !!v.ignoreSort;
+    $("albumOrder").value = v.albumOrder === "year" ? "year" : "az";
     (v.openArtists || []).forEach(n => openArtists.add(n));
     (v.openAlbums || []).forEach(k => openAlbums.add(k));
   }
@@ -846,6 +874,7 @@ display dialog "Done." & return & return & reportText buttons {"OK"} default but
     await Promise.all([store.del("library"), store.del("drafts")]);
     try { localStorage.removeItem(VIEW_KEY); } catch (e) {}
     $("search").value = ""; $("byAlbumArtist").checked = true; $("onlyChecked").checked = false; $("replace").checked = true;
+    $("ignoreSort").checked = false; $("albumOrder").value = "az";
     delete $("forgetBtn").dataset.confirm; $("forgetBtn").textContent = "Forget this library";
     $("bannerText").innerHTML = "<strong>Sample library.</strong> Your library and edits were removed from this browser. Load your exported library (.xml) to start again.";
     loadLibrary(sampleLibrary());
