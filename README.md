@@ -9,7 +9,11 @@ Live at **https://crate.ramakocherlakota.net**
 1. In Music on a Mac: **File → Library → Export Library…** and save the XML.
 2. Load it on the page (or drag it on). Everything runs in your browser; nothing is uploaded. The library, your edits and your view (search, toggles, open folders) are remembered in this browser (IndexedDB and localStorage) until you choose **Forget this library**.
 3. Tick artists, albums or songs. Open any number of existing playlists (or start new ones) and switch between them; each keeps its own changes. Press ♪ next to a song to hear Apple's 30-second preview (looked up through the public iTunes Search API).
-4. Copy or download the generated AppleScript and run it in Script Editor. One script writes every playlist you changed. It finds each song by its persistent ID, so it works for streaming Apple Music songs as well as local files.
+4. Copy, download or share (AirDrop from a phone) the generated AppleScript and run it in Script Editor on your Mac. One script covers every playlist you changed. It finds each song by its persistent ID, so it works for streaming Apple Music songs as well as local files.
+
+### Changes, not rewrites
+
+The script applies only what you changed: unticked songs are removed, newly ticked songs are added at the end (existing order is kept), and a renamed playlist is renamed in Music. Anything already done is skipped, so scripts made on different devices can be run in any order, and running one twice is harmless. After exporting a script, **Mark as applied** resets the change counts so the next script only carries newer edits.
 
 The whole app is one static file: [`site/index.html`](site/index.html).
 

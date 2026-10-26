@@ -191,16 +191,18 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
           <div><strong id="statTime">0:00</strong><span>Length</span></div>
         </div>
       </div>
-      <label class="check"><input type="checkbox" id="replace" checked> <span>If a new playlist's name is already taken in Music, replace that playlist's songs</span></label>
       <div class="btns">
         <button class="primary" type="button" id="copyBtn">Copy script</button>
         <button type="button" id="saveBtn" hidden>Save as .txt</button>
+        <button type="button" id="shareBtn" hidden>Share script</button>
+        <button type="button" id="appliedBtn" title="After you've run or sent this script, start counting changes from here">Mark as applied</button>
       </div>
       <div class="status" id="status" role="status"></div>
       <ol class="howto" id="howto">
         <li>Open <strong>Script Editor</strong> (Applications → Utilities).</li>
         <li>New document, paste, press <strong>Run ▶</strong>. Or download the script and double-click it.</li>
-        <li>Allow it to control Music if macOS asks. Every playlist with changes is written in one run; large ones take a minute or two, and a dialog lists what was done.</li>
+        <li>Allow it to control Music if macOS asks. The script only adds the songs you ticked (at the end) and removes the ones you unticked, so it's safe to run scripts from several devices, or the same one twice.</li>
+        <li>On a phone: <strong>Share script</strong> → AirDrop to your Mac, then <strong>Mark as applied</strong> so the next script only has newer changes.</li>
       </ol>
       <details>
         <summary>Show the script</summary>
@@ -303,7 +305,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
     const valid = new Set(tracks.map(t => t.id));
     const playlists = (lib.Playlists || [])
       .filter(p => !p.Master && !p["Distinguished Kind"] && !p.Folder && !p["Smart Info"] && p["Playlist Items"])
-      .map(p => ({ name: p.Name, ids: p["Playlist Items"].map(i => String(i["Track ID"])).filter(id => valid.has(id)) }))
+      .map(p => ({ name: p.Name, pid: p["Playlist Persistent ID"] || "", ids: p["Playlist Items"].map(i => String(i["Track ID"])).filter(id => valid.has(id)) }))
       .filter(p => p.ids.length);
     return { tracks, playlists, sample: false };
   }
@@ -560,7 +562,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
     $("statAlbums").textContent = albums.size.toLocaleString();
     $("statTime").textContent = selected.size ? fmtLong(ms) : "0 min";
     const any = drafts.some(changed);
-    $("copyBtn").disabled = !any; $("saveBtn").disabled = !any;
+    $("copyBtn").disabled = !any; $("saveBtn").disabled = !any; $("shareBtn").disabled = !any; $("appliedBtn").disabled = !any;
     $("copyBtn").textContent = any && drafts.filter(changed).length > 1 ? `Copy script (${drafts.filter(changed).length} playlists)` : "Copy script";
     $("scriptOut").value = any ? buildScript() : "";
     renderDrafts();
@@ -575,17 +577,20 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
     for (const id of d.orig) if (!d.ids.has(id)) rem++;
     return { add, rem };
   }
-  const isRenamed = d => d.orig && d.name.trim() !== d.origName;
+  const isRenamed = d => d.orig && (d.name.trim() || "Untitled") !== d.origName;
   function changed(d) {
-    if (!d.orig || isRenamed(d)) return d.ids.size > 0;
-    const c = diff(d); return c.add > 0 || c.rem > 0;
+    if (!d.orig) return d.ids.size > 0;
+    const c = diff(d); return c.add > 0 || c.rem > 0 || isRenamed(d);
   }
   function draftMeta(d) {
     const n = `${d.ids.size.toLocaleString()} song${d.ids.size === 1 ? "" : "s"}`;
     if (!d.orig) return `New · ${n}`;
-    if (isRenamed(d)) return `New copy of “${d.origName}” · ${n}`;
     const c = diff(d);
-    return c.add || c.rem ? `${n} · +${c.add} −${c.rem}` : `${n} · no changes yet`;
+    const parts = [n];
+    if (isRenamed(d)) parts.push(`renamed from “${d.origName}”`);
+    if (c.add || c.rem) parts.push(`+${c.add} −${c.rem}`);
+    if (parts.length === 1) parts.push("no changes yet");
+    return parts.join(" · ");
   }
   function renderDrafts() {
     const box = $("drafts"); box.textContent = "";
@@ -630,47 +635,70 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
   // ---------- AppleScript ----------
   function orderedPids(set) { const out = []; for (const a of artists) for (const id of a.ids) if (set.has(id)) out.push(trackById.get(id).pid); return out; }
   function asString(s) { return '"' + s.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"'; }
+  // The script applies changes rather than rebuilding: it adds ticked songs at the end and removes unticked
+  // ones, skipping anything already done. Scripts from different devices can therefore be run in any order.
   function buildScript() {
-    const replaceNew = $("replace").checked;
     const list = drafts.filter(changed);
     const calls = list.map(d => {
-      // Editing an existing playlist always replaces its songs; a new or renamed one follows the checkbox.
-      const replace = d.orig && !isRenamed(d) ? true : replaceNew;
-      return `set end of report to fillPlaylist(${asString(d.name.trim() || "Untitled")}, "${orderedPids(d.ids).join(",")}", ${replace})`;
+      const name = d.name.trim() || "Untitled";
+      const adds = d.orig ? new Set([...d.ids].filter(id => !d.orig.has(id))) : d.ids;
+      const removes = d.orig ? new Set([...d.orig].filter(id => !d.ids.has(id))) : new Set();
+      return `set end of report to applyChanges(${asString(d.origPid || "")}, ${asString(d.orig ? d.origName : name)}, ${asString(name)}, "${orderedPids(adds).join(",")}", "${orderedPids(removes).join(",")}")`;
     }).join("\n");
-    return `-- Made with Crate Playlist Builder: ${list.length} playlist${list.length === 1 ? "" : "s"}
-on fillPlaylist(plName, idText, replaceSongs)
-	if idText is "" then
-		set pids to {}
-	else
-		set AppleScript's text item delimiters to ","
-		set pids to text items of idText
-		set AppleScript's text item delimiters to ""
-	end if
+    return `-- Made with Crate Playlist Builder: changes to ${list.length} playlist${list.length === 1 ? "" : "s"}
+on splitIDs(t)
+	if t is "" then return {}
+	set AppleScript's text item delimiters to ","
+	set out to text items of t
+	set AppleScript's text item delimiters to ""
+	return out
+end splitIDs
+
+on applyChanges(plID, findName, newName, addText, removeText)
+	set adds to splitIDs(addText)
+	set removes to splitIDs(removeText)
 	set added to 0
+	set removed to 0
 	set missing to 0
+	set renamed to false
 	tell application "Music"
 		with timeout of 3600 seconds
-			if replaceSongs and (exists user playlist plName) then
-				set pl to user playlist plName
-				delete every track of pl
-			else
-				set pl to make new user playlist with properties {name:plName}
-			end if
-			repeat with pid in pids
+			set pl to missing value
+			if plID is not "" then
 				try
-					duplicate (first track of library playlist 1 whose persistent ID is (contents of pid)) to pl
-					set added to added + 1
-				on error
-					set missing to missing + 1
+					set pl to (first user playlist whose persistent ID is plID)
 				end try
+			end if
+			if pl is missing value and (exists user playlist findName) then set pl to user playlist findName
+			if pl is missing value then set pl to make new user playlist with properties {name:newName}
+			if name of pl is not newName then
+				set name of pl to newName
+				set renamed to true
+			end if
+			repeat with pid in removes
+				set hits to (every track of pl whose persistent ID is (contents of pid))
+				if (count of hits) > 0 then
+					delete (every track of pl whose persistent ID is (contents of pid))
+					set removed to removed + 1
+				end if
+			end repeat
+			repeat with pid in adds
+				if (count of (every track of pl whose persistent ID is (contents of pid))) is 0 then
+					try
+						duplicate (first track of library playlist 1 whose persistent ID is (contents of pid)) to pl
+						set added to added + 1
+					on error
+						set missing to missing + 1
+					end try
+				end if
 			end repeat
 		end timeout
 	end tell
-	set msg to plName & ": " & added & " songs"
+	set msg to newName & ": added " & added & ", removed " & removed
+	if renamed then set msg to msg & ", renamed"
 	if missing > 0 then set msg to msg & " (" & missing & " not found in your library)"
 	return msg
-end fillPlaylist
+end applyChanges
 
 set report to {}
 ${calls}
@@ -696,17 +724,43 @@ display dialog "Done." & return & return & reportText buttons {"OK"} default but
   $("saveBtn").textContent = "Download script";
   $("saveBtn").hidden = false;
   $("saveBtn").addEventListener("click", () => {
-    const list = drafts.filter(changed);
-    const base = (list.length === 1 ? list[0].name.trim() || "Untitled" : "Playlists").replace(/[\/\\:*?"<>|]/g, "-");
-    const url = URL.createObjectURL(new Blob([buildScript()], { type: "text/plain" }));
+    const file = scriptFile();
+    const url = URL.createObjectURL(file);
     const a = document.createElement("a");
-    a.href = url; a.download = base + ".applescript";
+    a.href = url; a.download = file.name;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     status("Downloaded. Double-click it to open in Script Editor, then press Run.");
   });
+  function scriptFile() {
+    const list = drafts.filter(changed);
+    const base = (list.length === 1 ? list[0].name.trim() || "Untitled" : "Playlist changes").replace(/[\/\\:*?"<>|]/g, "-");
+    return new File([buildScript()], base + ".applescript", { type: "text/plain" });
+  }
+  // Phones and tablets can hand the file to AirDrop, Messages, Files and so on.
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [new File(["x"], "test.applescript", { type: "text/plain" })] })) $("shareBtn").hidden = false;
+  } catch (e) {}
+  $("shareBtn").addEventListener("click", async () => {
+    try { await navigator.share({ files: [scriptFile()], title: "Playlist changes" }); status("Sent. Once it's on your Mac, double-click it and press Run. Then tap Mark as applied here."); }
+    catch (e) { if (e && e.name !== "AbortError") status("Sharing didn't work here. Use Download script instead."); }
+  });
+  $("appliedBtn").addEventListener("click", () => {
+    const b = $("appliedBtn");
+    if (!b.dataset.confirm) {
+      b.dataset.confirm = "1"; b.textContent = "Clear these changes?";
+      setTimeout(() => { delete b.dataset.confirm; b.textContent = "Mark as applied"; }, 4000);
+      return;
+    }
+    delete b.dataset.confirm; b.textContent = "Mark as applied";
+    const n = drafts.filter(changed).length;
+    for (const d of drafts) if (changed(d)) {
+      d.orig = new Set(d.ids); d.origName = d.name.trim() || "Untitled"; d.origAt = Date.now();
+    }
+    refresh();
+    status(`Marked ${n} playlist${n === 1 ? "" : "s"} as applied. New edits will start from here.`);
+  });
   $("plName").addEventListener("input", () => { drafts[active].name = $("plName").value; refresh(); });
-  $("replace").addEventListener("change", refresh);
 
   // ---------- controls ----------
   let searchTimer;
@@ -726,9 +780,9 @@ display dialog "Done." & return & return & reportText buttons {"OK"} default but
     const p = library.playlists[Number(e.target.value)];
     e.target.value = "";
     if (!p) return;
-    const open = drafts.findIndex(d => d.origName === p.name);
+    const open = drafts.findIndex(d => (p.pid && d.origPid === p.pid) || d.origName === p.name);
     if (open >= 0) { switchDraft(open); status(`Back to “${p.name}”.`); return; }
-    openDraft({ name: p.name, ids: new Set(p.ids), orig: new Set(p.ids), origName: p.name });
+    openDraft({ name: p.name, ids: new Set(p.ids), orig: new Set(p.ids), origName: p.name, origPid: p.pid, origAt: library.loadedAt || 0 });
     status(`Editing “${p.name}”. Your other playlists keep their changes.`);
   });
   $("newDraft").addEventListener("click", () => { openDraft(newDraft()); $("plName").focus(); $("plName").select(); });
@@ -769,7 +823,7 @@ display dialog "Done." & return & return & reportText buttons {"OK"} default but
       store.set("drafts", {
         active,
         drafts: drafts.map(d => ({
-          name: d.name, origName: d.origName,
+          name: d.name, origName: d.origName, origPid: d.origPid || "", origAt: d.origAt || 0,
           pids: [...d.ids].map(pidOf).filter(Boolean),
           origPids: d.orig ? [...d.orig].map(pidOf).filter(Boolean) : null,
         })),
@@ -786,12 +840,15 @@ display dialog "Done." & return & return & reportText buttons {"OK"} default but
     drafts = saved.drafts.map(d => {
       const ids = toIds(d.pids);
       let orig = null;
-      if (d.origName != null) {
-        // Compare against the playlist as it is in this file, so a re-export after running the script shows no changes.
-        const pl = library.playlists.find(p => p.name === d.origName);
-        orig = pl ? new Set(pl.ids) : new Set((d.origPids || []).map(p => idOf.get(p)).filter(Boolean));
+      let origName = d.origName, origPid = d.origPid || "", origAt = d.origAt || 0;
+      if (origName != null) {
+        // A library exported after this draft's starting point is the newer truth (e.g. after running a script);
+        // otherwise keep the saved starting point, which "Mark as applied" may have moved forward.
+        const pl = library.playlists.find(p => (origPid && p.pid === origPid) || p.name === origName);
+        if (pl && (library.loadedAt || 0) >= origAt) { orig = new Set(pl.ids); origName = pl.name; origPid = pl.pid || origPid; origAt = library.loadedAt || 0; }
+        else orig = new Set((d.origPids || []).map(p => idOf.get(p)).filter(Boolean));
       }
-      return { name: d.name, ids, orig, origName: d.origName };
+      return { name: d.name, ids, orig, origName, origPid, origAt };
     });
     active = Math.min(Math.max(0, saved.active || 0), drafts.length - 1);
     selected = drafts[active].ids; $("plName").value = drafts[active].name;
@@ -808,7 +865,7 @@ display dialog "Done." & return & return & reportText buttons {"OK"} default but
     try {
       localStorage.setItem(VIEW_KEY, JSON.stringify({
         search: $("search").value, byAlbumArtist: $("byAlbumArtist").checked, onlyChecked: $("onlyChecked").checked,
-        replace: $("replace").checked, ignoreSort: $("ignoreSort").checked, albumOrder: $("albumOrder").value,
+        ignoreSort: $("ignoreSort").checked, albumOrder: $("albumOrder").value,
         openArtists: [...openArtists], openAlbums: [...openAlbums],
       }));
     } catch (e) {}
@@ -820,7 +877,6 @@ display dialog "Done." & return & return & reportText buttons {"OK"} default but
     $("search").value = v.search || "";
     $("byAlbumArtist").checked = v.byAlbumArtist !== false;
     $("onlyChecked").checked = !!v.onlyChecked;
-    $("replace").checked = v.replace !== false;
     $("ignoreSort").checked = !!v.ignoreSort;
     $("albumOrder").value = v.albumOrder === "year" ? "year" : "az";
     (v.openArtists || []).forEach(n => openArtists.add(n));
@@ -873,7 +929,7 @@ display dialog "Done." & return & return & reportText buttons {"OK"} default but
     saving = false; clearTimeout(saveTimer);
     await Promise.all([store.del("library"), store.del("drafts")]);
     try { localStorage.removeItem(VIEW_KEY); } catch (e) {}
-    $("search").value = ""; $("byAlbumArtist").checked = true; $("onlyChecked").checked = false; $("replace").checked = true;
+    $("search").value = ""; $("byAlbumArtist").checked = true; $("onlyChecked").checked = false;
     $("ignoreSort").checked = false; $("albumOrder").value = "az";
     delete $("forgetBtn").dataset.confirm; $("forgetBtn").textContent = "Forget this library";
     $("bannerText").innerHTML = "<strong>Sample library.</strong> Your library and edits were removed from this browser. Load your exported library (.xml) to start again.";
