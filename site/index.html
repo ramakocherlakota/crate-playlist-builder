@@ -655,12 +655,14 @@ on splitIDs(t)
 end splitIDs
 
 on applyChanges(plID, findName, newName, addText, removeText)
-	set adds to splitIDs(addText)
-	set removes to splitIDs(removeText)
-	set added to 0
-	set removed to 0
-	set missing to 0
-	set renamed to false
+	-- Counter names are prefixed so they can't collide with Music's own terms
+	-- (e.g. "removed" is one of Music's cloud status values).
+	set addIDs to splitIDs(addText)
+	set removeIDs to splitIDs(removeText)
+	set nAdded to 0
+	set nRemoved to 0
+	set nMissing to 0
+	set didRename to false
 	tell application "Music"
 		with timeout of 3600 seconds
 			set pl to missing value
@@ -673,30 +675,29 @@ on applyChanges(plID, findName, newName, addText, removeText)
 			if pl is missing value then set pl to make new user playlist with properties {name:newName}
 			if name of pl is not newName then
 				set name of pl to newName
-				set renamed to true
+				set didRename to true
 			end if
-			repeat with pid in removes
-				set hits to (every track of pl whose persistent ID is (contents of pid))
-				if (count of hits) > 0 then
-					delete (every track of pl whose persistent ID is (contents of pid))
-					set removed to removed + 1
+			repeat with trackID in removeIDs
+				if (count of (every track of pl whose persistent ID is (contents of trackID))) > 0 then
+					delete (every track of pl whose persistent ID is (contents of trackID))
+					set nRemoved to nRemoved + 1
 				end if
 			end repeat
-			repeat with pid in adds
-				if (count of (every track of pl whose persistent ID is (contents of pid))) is 0 then
+			repeat with trackID in addIDs
+				if (count of (every track of pl whose persistent ID is (contents of trackID))) is 0 then
 					try
-						duplicate (first track of library playlist 1 whose persistent ID is (contents of pid)) to pl
-						set added to added + 1
+						duplicate (first track of library playlist 1 whose persistent ID is (contents of trackID)) to pl
+						set nAdded to nAdded + 1
 					on error
-						set missing to missing + 1
+						set nMissing to nMissing + 1
 					end try
 				end if
 			end repeat
 		end timeout
 	end tell
-	set msg to newName & ": added " & added & ", removed " & removed
-	if renamed then set msg to msg & ", renamed"
-	if missing > 0 then set msg to msg & " (" & missing & " not found in your library)"
+	set msg to newName & ": added " & nAdded & ", removed " & nRemoved
+	if didRename then set msg to msg & ", renamed"
+	if nMissing > 0 then set msg to msg & " (" & nMissing & " not found in your library)"
 	return msg
 end applyChanges
 
