@@ -171,6 +171,10 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
     <span id="bannerText"><strong>Sample library.</strong> These songs are examples to show how it works. Load your exported library (.xml) to see your music.</span>
     <button type="button" id="forgetBtn" hidden>Forget this library</button>
   </div>
+  <div class="banner choice" id="keepChoice" hidden role="alert">
+    <span id="keepText"></span>
+    <span class="btns"><button type="button" id="keepBtn">Keep my changes</button><button type="button" class="primary" id="freshBtn">Start fresh from this file</button></span>
+  </div>
 
   <div class="main">
     <aside class="panel" aria-label="Playlists">
@@ -933,8 +937,26 @@ display dialog "Done." & return & return & reportText buttons {"OK"} default but
     $("banner").hidden = false;
     status("");
     if (!opts.restored) store.set("library", { fileName, loadedAt: lib.loadedAt, tracks: lib.tracks, playlists: lib.playlists });
-    restoreDrafts().finally(() => { saving = true; scheduleSave(); });
+    $("keepChoice").hidden = true;
+    restoreDrafts().finally(() => {
+      saving = true; scheduleSave();
+      // A freshly loaded file that disagrees with saved edits: let the viewer decide rather than guess.
+      const pending = drafts.filter(changed);
+      if (!opts.restored && pending.length) {
+        $("keepText").textContent = `${pending.length === 1 ? "1 playlist you were editing has" : `${pending.length} playlists you were editing have`} changes that aren't in this file (${pending.map(d => d.name.trim() || "Untitled").join(", ")}). Keep them, or reset to what's in the file?`;
+        $("keepChoice").hidden = false;
+      }
+    });
   }
+  $("keepBtn").addEventListener("click", () => { $("keepChoice").hidden = true; status("Kept your changes."); });
+  $("freshBtn").addEventListener("click", () => {
+    $("keepChoice").hidden = true;
+    // Existing playlists go back to the file's contents; new playlists that never reached Music are dropped.
+    drafts = drafts.filter(d => d.orig).map(d => ({ ...d, ids: new Set(d.orig), name: d.origName }));
+    if (!drafts.length) drafts = [{ name: "My Picks", ids: new Set(), orig: null, origName: null }];
+    switchDraft(0);
+    status("Reset every playlist to match this file.");
+  });
   $("forgetBtn").addEventListener("click", async () => {
     if (!$("forgetBtn").dataset.confirm) {
       $("forgetBtn").dataset.confirm = "1"; $("forgetBtn").textContent = "Forget library and all edits?";
