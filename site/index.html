@@ -566,6 +566,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
     $("copyBtn").textContent = any && drafts.filter(changed).length > 1 ? `Copy script (${drafts.filter(changed).length} playlists)` : "Copy script";
     $("scriptOut").value = any ? buildScript() : "";
     renderDrafts();
+    fillPlaylists();
     scheduleSave();
     saveView();
   }
@@ -616,6 +617,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
     });
   }
   function switchDraft(i) {
+    status("");
     active = i; selected = drafts[i].ids; $("plName").value = drafts[i].name;
     render();
   }
@@ -711,7 +713,13 @@ display dialog "Done." & return & return & reportText buttons {"OK"} default but
   }
 
   // ---------- output ----------
-  const status = msg => { $("status").textContent = msg; };
+  // Status lines are one-off confirmations, so they clear themselves.
+  let statusTimer;
+  const status = msg => {
+    clearTimeout(statusTimer);
+    $("status").textContent = msg;
+    if (msg) statusTimer = setTimeout(() => { $("status").textContent = ""; }, 8000);
+  };
   $("copyBtn").addEventListener("click", () => {
     const text = buildScript();
     const fallback = () => { const d = document.querySelector("details"); d.open = true; const ta = $("scriptOut"); ta.focus(); ta.select(); status("Copying was blocked here. The script is selected below: press ⌘C."); };
@@ -790,9 +798,15 @@ display dialog "Done." & return & return & reportText buttons {"OK"} default but
   function fillPlaylists() {
     const sel = $("fromPlaylist");
     sel.length = 1;
-    library.playlists.forEach((p, i) => { const o = document.createElement("option"); o.value = i; o.textContent = `${p.name} (${p.ids.length})`; sel.appendChild(o); });
-    sel.disabled = !library.playlists.length;
-    sel.options[0].textContent = library.playlists.length ? "Edit an existing playlist…" : "No playlists in this file (use Export Library)";
+    const isOpen = p => drafts.some(d => d.orig && ((p.pid && d.origPid === p.pid) || d.origName === p.name));
+    let shown = 0;
+    library.playlists.forEach((p, i) => {
+      if (isOpen(p)) return;
+      const o = document.createElement("option"); o.value = i; o.textContent = `${p.name} (${p.ids.length})`; sel.appendChild(o); shown++;
+    });
+    sel.disabled = !shown;
+    sel.options[0].textContent = !library.playlists.length ? "No playlists in this file (use Export Library)"
+      : shown ? "Edit an existing playlist…" : "All your playlists are open";
   }
 
   // ---------- remembering the library and edits (IndexedDB, this browser only) ----------
