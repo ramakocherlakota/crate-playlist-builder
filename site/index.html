@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Browse your Apple Music library as Artist → Album → Song, tick what you want, and build a playlist from it.">
 <title>Crate Playlist Builder</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="Crate">
+<meta name="theme-color" content="#3a46c9">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
 /* Layout: a record-crate tree on the left, a sticky "press the playlist" panel on the right; stacks on phones. */
@@ -47,7 +51,13 @@ body {
 }
 .wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
 header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
-h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(1.7rem, 3vw, 2.3rem); letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(1.7rem, 3vw, 2.3rem); letter-spacing: -0.02em; margin: 0; text-wrap: balance; display: flex; align-items: center; gap: 12px; }
+.logo { width: 1.25em; height: 1.25em; flex: none; }
+.help { display: flex; flex-direction: column; gap: 10px; }
+.phone { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font-size: 13.5px; }
+.phone h2 { font-family: var(--font-display); font-weight: 600; font-size: 1rem; margin: 0 0 6px; }
+.phone ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+.phone p { margin: 8px 0 0; color: var(--muted); }
 .sub { color: var(--muted); margin: 4px 0 0; max-width: 62ch; }
 .steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
 .steps li { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; gap: 10px; font-size: 13.5px; }
@@ -167,7 +177,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
 <div class="wrap">
   <header>
     <div>
-      <h1>Crate Playlist Builder</h1>
+      <h1><img src="icon.svg" alt="" class="logo" width="40" height="40">Crate Playlist Builder</h1>
       <p class="sub">Browse your Apple Music library as Artist → Album → Song, tick what you want, and build a playlist from it.</p>
     </div>
     <div class="btns">
@@ -177,12 +187,26 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
     </div>
   </header>
 
-  <ol class="steps" id="steps">
+  <div class="help" id="steps">
+  <ol class="steps">
     <li><b>1</b><span>In Music on your Mac: <kbd>File → Library → Export Library…</kbd> and save the XML.</span></li>
     <li><b>2</b><span>Load that file here, or drag it onto this page. It stays in your browser, isn't uploaded, and is remembered here along with your edits.</span></li>
     <li><b>3</b><span>Pick or start playlists on the left, then tick artists, albums or songs on the right. Switch between playlists any time.</span></li>
     <li><b>4</b><span>Copy the script, paste it into <kbd>Script Editor</kbd>, and press Run.</span></li>
   </ol>
+  <section class="phone" aria-labelledby="phoneHead">
+    <h2 id="phoneHead">Editing on your iPhone too</h2>
+    <ol>
+      <li><strong>Mac:</strong> export the library into iCloud Drive (in the save dialog pick iCloud Drive, e.g. a “Crate” folder, and keep the name <code>Library.xml</code>).</li>
+      <li><strong>iPhone:</strong> open this page, tap <strong>Load library file</strong> → Browse → iCloud Drive → <code>Library.xml</code>. The phone remembers it after that.</li>
+      <li><strong>iPhone:</strong> edit playlists as usual. Check <strong>Show changes</strong>, then tap <strong>Share script</strong> → AirDrop → your Mac.</li>
+      <li><strong>iPhone:</strong> tap <strong>Mark as applied</strong>, so the next script from the phone only carries newer edits.</li>
+      <li><strong>Mac:</strong> double-click the script in Downloads to open it in Script Editor, then press Run.</li>
+      <li><strong>Afterwards:</strong> re-export to the same iCloud Drive file and load it on each device; if asked, choose <strong>Start fresh from this file</strong> for changes you've already run.</li>
+    </ol>
+    <p>Scripts only add and remove the songs you changed, so edits made on the Mac and the iPhone can be run in any order. If both devices change the same song in opposite ways, the script run last wins.</p>
+  </section>
+  </div>
 
   <div class="banner" id="banner">
     <span id="bannerText"><strong>Sample library.</strong> These songs are examples to show how it works. Load your exported library (.xml) to see your music.</span>
