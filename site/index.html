@@ -20,6 +20,8 @@
   --on-accent: #ffffff;
   --warn-bg: #fff4d6;
   --warn-fg: #6b4a00;
+  --add: #1f7a3d;
+  --remove: #b42318;
   --font-display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
   --font-body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
@@ -28,13 +30,13 @@
   :root:not([data-theme="light"]) {
     --bg: #12141c; --surface: #1a1d28; --fg: #e7e9f2; --muted: #9a9fb4; --line: #2c3040;
     --hover: #232736; --accent: #8f98ff; --accent-soft: #272c52; --on-accent: #10132a;
-    --warn-bg: #3a3014; --warn-fg: #f3d68a; color-scheme: dark;
+    --warn-bg: #3a3014; --warn-fg: #f3d68a; --add: #6fd08c; --remove: #ff8a7a; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #12141c; --surface: #1a1d28; --fg: #e7e9f2; --muted: #9a9fb4; --line: #2c3040;
   --hover: #232736; --accent: #8f98ff; --accent-soft: #272c52; --on-accent: #10132a;
-  --warn-bg: #3a3014; --warn-fg: #f3d68a; color-scheme: dark;
+  --warn-bg: #3a3014; --warn-fg: #f3d68a; --add: #6fd08c; --remove: #ff8a7a; color-scheme: dark;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -140,6 +142,21 @@ aside h2 { font-family: var(--font-display); font-weight: 600; font-size: 1.2rem
 .editing { display: flex; flex-direction: column; gap: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
 .howto { font-size: 13px; color: var(--muted); margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
 details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+.changes { display: flex; flex-direction: column; gap: 14px; margin-top: 10px; max-height: 50vh; overflow-y: auto; }
+.changes h3 { font-size: 14px; margin: 0 0 4px; overflow-wrap: anywhere; }
+.changes .note { font-size: 12.5px; color: var(--muted); margin: 0 0 4px; }
+.changes ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.changes li { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 13px; border-bottom: 1px solid var(--line); }
+.changes li:last-child { border-bottom: 0; }
+.changes .sign { font-family: var(--font-mono); font-weight: 600; width: 1em; flex: none; text-align: center; }
+.changes .add .sign { color: var(--add); }
+.changes .remove .sign { color: var(--remove); }
+.changes .song { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.changes .song b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.changes .song small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.changes .remove .song b { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--remove) 60%, transparent); }
+.changes button { font-size: 12px; padding: 2px 8px; flex: none; }
+.changes .more { font-size: 12.5px; color: var(--muted); padding-top: 4px; }
 textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size: 11.5px; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px; margin-top: 8px; resize: vertical; }
 .drop-hint { position: fixed; inset: 0; background: color-mix(in srgb, var(--accent) 18%, transparent); border: 3px dashed var(--accent); display: grid; place-items: center; font-family: var(--font-display); font-size: 1.6rem; color: var(--fg); z-index: 20; pointer-events: none; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
@@ -208,7 +225,11 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
         <li>Allow it to control Music if macOS asks. The script only adds the songs you ticked (at the end) and removes the ones you unticked, so it's safe to run scripts from several devices, or the same one twice.</li>
         <li>On a phone: <strong>Share script</strong> → AirDrop to your Mac, then <strong>Mark as applied</strong> so the next script only has newer changes.</li>
       </ol>
-      <details>
+      <details id="changesBox">
+        <summary id="changesSummary">Show changes</summary>
+        <div class="changes" id="changesList"></div>
+      </details>
+      <details id="scriptBox">
         <summary>Show the script</summary>
         <textarea id="scriptOut" readonly aria-label="AppleScript"></textarea>
       </details>
@@ -571,6 +592,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
     $("scriptOut").value = any ? buildScript() : "";
     renderDrafts();
     fillPlaylists();
+    renderChanges();
     scheduleSave();
     saveView();
   }
@@ -620,6 +642,54 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
       row.append(pick, close); box.appendChild(row);
     });
   }
+  // The exact songs each playlist's script will add or remove, with a per-song undo.
+  const orderedIds = set => { const out = []; for (const a of artists) for (const id of a.ids) if (set.has(id)) out.push(id); return out; };
+  function draftChanges(d) {
+    return {
+      adds: orderedIds(d.orig ? new Set([...d.ids].filter(id => !d.orig.has(id))) : d.ids),
+      removes: orderedIds(d.orig ? new Set([...d.orig].filter(id => !d.ids.has(id))) : new Set()),
+    };
+  }
+  function renderChanges() {
+    const list = drafts.filter(changed);
+    let add = 0, rem = 0;
+    const per = list.map(d => { const c = draftChanges(d); add += c.adds.length; rem += c.removes.length; return [d, c]; });
+    $("changesSummary").textContent = list.length
+      ? `Show changes (+${add} −${rem}${list.length > 1 ? ` across ${list.length} playlists` : ""})` : "Show changes (none yet)";
+    if (!$("changesBox").open) return;
+    const box = $("changesList"); box.textContent = "";
+    if (!list.length) { box.textContent = "Nothing to apply yet. Tick or untick songs and they'll be listed here."; return; }
+    const LIMIT = 200;
+    for (const [d, c] of per) {
+      const sec = document.createElement("section");
+      const h = document.createElement("h3"); h.textContent = d.name.trim() || "Untitled"; sec.appendChild(h);
+      const note = !d.orig ? "New playlist" : isRenamed(d) ? `Renamed from “${d.origName}”` : "";
+      if (note) { const n = document.createElement("p"); n.className = "note"; n.textContent = note; sec.appendChild(n); }
+      const ul = document.createElement("ul");
+      const item = (id, kind) => {
+        const t = trackById.get(id); if (!t) return;
+        const li = document.createElement("li"); li.className = kind;
+        const sign = document.createElement("span"); sign.className = "sign"; sign.textContent = kind === "add" ? "+" : "−";
+        sign.setAttribute("aria-label", kind === "add" ? "Adding" : "Removing");
+        const song = document.createElement("span"); song.className = "song";
+        const b = document.createElement("b"); b.textContent = t.name; b.title = t.name;
+        const sm = document.createElement("small"); sm.textContent = [t.artist || t.albumArtist, t.album].filter(Boolean).join(" · ");
+        song.append(b, sm);
+        const undo = document.createElement("button"); undo.type = "button"; undo.textContent = "Undo";
+        undo.setAttribute("aria-label", `Undo ${kind === "add" ? "adding" : "removing"} ${t.name}`);
+        undo.addEventListener("click", () => { kind === "add" ? d.ids.delete(id) : d.ids.add(id); refresh(); if ($("onlyChecked").checked) render(); });
+        li.append(sign, song, undo); ul.appendChild(li);
+      };
+      c.removes.slice(0, LIMIT).forEach(id => item(id, "remove"));
+      c.adds.slice(0, LIMIT).forEach(id => item(id, "add"));
+      sec.appendChild(ul);
+      const hidden = Math.max(0, c.removes.length - LIMIT) + Math.max(0, c.adds.length - LIMIT);
+      if (hidden) { const m = document.createElement("p"); m.className = "more"; m.textContent = `…and ${hidden.toLocaleString()} more.`; sec.appendChild(m); }
+      box.appendChild(sec);
+    }
+  }
+  $("changesBox").addEventListener("toggle", renderChanges);
+
   function switchDraft(i) {
     status("");
     active = i; selected = drafts[i].ids; $("plName").value = drafts[i].name;
@@ -726,7 +796,7 @@ display dialog "Done." & return & return & reportText buttons {"OK"} default but
   };
   $("copyBtn").addEventListener("click", () => {
     const text = buildScript();
-    const fallback = () => { const d = document.querySelector("details"); d.open = true; const ta = $("scriptOut"); ta.focus(); ta.select(); status("Copying was blocked here. The script is selected below: press ⌘C."); };
+    const fallback = () => { const d = $("scriptBox"); d.open = true; const ta = $("scriptOut"); ta.focus(); ta.select(); status("Copying was blocked here. The script is selected below: press ⌘C."); };
     try {
       navigator.clipboard.writeText(text).then(
         () => status(library.sample ? "Copied. This is the sample library, so the script won't find these songs in Music." : "Copied. Paste it into Script Editor and press Run."),

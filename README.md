@@ -13,7 +13,7 @@ Live at **https://crate.ramakocherlakota.net**
 
 ### Changes, not rewrites
 
-The script applies only what you changed: unticked songs are removed, newly ticked songs are added at the end (existing order is kept), and a renamed playlist is renamed in Music. Anything already done is skipped, so scripts made on different devices can be run in any order, and running one twice is harmless. After exporting a script, **Mark as applied** resets the change counts so the next script only carries newer edits.
+The script applies only what you changed: unticked songs are removed, newly ticked songs are added at the end (existing order is kept), and a renamed playlist is renamed in Music. Anything already done is skipped, so scripts made on different devices can be run in any order, and running one twice is harmless. **Show changes** lists exactly which songs each playlist will gain or lose (with a per-song Undo). After exporting a script, **Mark as applied** resets the change counts so the next script only carries newer edits.
 
 The whole app is one static file: [`site/index.html`](site/index.html).
 
