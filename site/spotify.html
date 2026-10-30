@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Copy your Apple Music library and playlists into Spotify.">
+<title>Crate to Spotify</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#3a46c9">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: four stacked steps (connect, match, review, send), one column, same palette as Crate. */
+:root {
+  --bg: #f4f5f8; --surface: #ffffff; --fg: #1a1d29; --muted: #5d6275; --line: #dfe1e9; --hover: #eceef5;
+  --accent: #3a46c9; --accent-soft: #e4e6fb; --on-accent: #ffffff;
+  --warn-bg: #fff4d6; --warn-fg: #6b4a00; --ok: #1f7a3d; --bad: #b42318;
+  --font-display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12141c; --surface: #1a1d28; --fg: #e7e9f2; --muted: #9a9fb4; --line: #2c3040; --hover: #232736;
+    --accent: #8f98ff; --accent-soft: #272c52; --on-accent: #10132a;
+    --warn-bg: #3a3014; --warn-fg: #f3d68a; --ok: #6fd08c; --bad: #ff8a7a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12141c; --surface: #1a1d28; --fg: #e7e9f2; --muted: #9a9fb4; --line: #2c3040; --hover: #232736;
+  --accent: #8f98ff; --accent-soft: #272c52; --on-accent: #10132a;
+  --warn-bg: #3a3014; --warn-fg: #f3d68a; --ok: #6fd08c; --bad: #ff8a7a; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.45; margin: 0;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 64px;
+}
+.wrap { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(1.6rem, 3vw, 2.1rem); letter-spacing: -0.02em; margin: 0; display: flex; align-items: center; gap: 12px; }
+.logo { width: 1.25em; height: 1.25em; flex: none; }
+.sub { color: var(--muted); margin: 4px 0 0; max-width: 62ch; }
+a { color: var(--accent); }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.step h2 { font-family: var(--font-display); font-weight: 600; font-size: 1.15rem; margin: 0; display: flex; align-items: baseline; gap: 10px; }
+.step h2 b { font-family: var(--font-mono); font-weight: 500; color: var(--accent); font-size: .95rem; }
+.step p { margin: 0; }
+.muted { color: var(--muted); font-size: 13.5px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+button, .button { font: inherit; font-size: 14px; cursor: pointer; border-radius: 8px; padding: 7px 12px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); text-decoration: none; display: inline-flex; align-items: center; }
+button:hover, .button:hover { background: var(--hover); }
+button.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 600; }
+button.primary:hover { filter: brightness(1.08); background: var(--accent); }
+button:disabled { opacity: .5; cursor: not-allowed; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+input[type="text"], input[type="search"], select { font: inherit; font-size: 14px; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; min-width: 0; }
+.banner { background: var(--warn-bg); color: var(--warn-fg); border-radius: 10px; padding: 10px 14px; font-size: 14px; }
+.banner.error { border-left: 4px solid var(--bad); }
+.stats { display: flex; flex-wrap: wrap; gap: 8px 22px; }
+.stats div { display: flex; flex-direction: column; }
+.stats strong { font-family: var(--font-display); font-size: 1.45rem; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.stats span { font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.stats .ok strong { color: var(--ok); }
+.stats .bad strong { color: var(--bad); }
+.bar { height: 8px; background: var(--hover); border-radius: 999px; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+@media (prefers-reduced-motion: reduce) { .bar i { transition: none; } }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 13px; padding: 4px 10px; border-radius: 999px; }
+.chip[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.list { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.item { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 6px 16px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.item:last-child { border-bottom: 0; }
+@media (max-width: 640px) { .item { grid-template-columns: minmax(0, 1fr); } }
+.song b { font-weight: 600; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.song small { color: var(--muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pick { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.pick select { width: 100%; }
+.pick .row input { flex: 1 1 160px; }
+.tag { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; padding: 1px 6px; border-radius: 4px; background: var(--hover); color: var(--muted); align-self: flex-start; }
+.tag.exact { color: var(--ok); }
+.tag.close { color: var(--warn-fg); background: var(--warn-bg); }
+.tag.none, .tag.skipped { color: var(--bad); }
+.pls { display: flex; flex-direction: column; gap: 4px; max-height: 340px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+.pls label { display: flex; gap: 8px; align-items: baseline; font-size: 14px; }
+.pls label span:first-of-type { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.pls small { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.check { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; }
+.check input, .pls input { accent-color: var(--accent); }
+.log { font-family: var(--font-mono); font-size: 12.5px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.log a { word-break: break-all; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1><img src="icon.svg" alt="" class="logo" width="40" height="40">Crate to Spotify</h1>
+      <p class="sub">Copy your Apple Music library into Spotify: every song you have into Liked Songs, and the playlists you choose recreated in the same order.</p>
+    </div>
+    <a class="button" href="./">← Back to Crate</a>
+  </header>
+
+  <div class="banner" id="libBanner">Looking for the library you loaded in Crate…</div>
+
+  <section class="step" aria-labelledby="h1s">
+    <h2 id="h1s"><b>1</b>Connect Spotify</h2>
+    <p id="authText" class="muted">Sign in to the Spotify account you want to copy into. Crate talks to Spotify straight from this browser; nothing goes through any other server.</p>
+    <div class="row">
+      <button class="primary" type="button" id="connectBtn">Connect Spotify</button>
+      <button type="button" id="disconnectBtn" hidden>Disconnect</button>
+    </div>
+  </section>
+
+  <section class="step" aria-labelledby="h2s">
+    <h2 id="h2s"><b>2</b>Find your songs on Spotify</h2>
+    <p class="muted">Each song is looked up by title, artist and album. Spotify limits how fast this can go, so a few thousand songs take a while; you can leave this tab open, and if it gets closed it picks up where it left off.</p>
+    <div class="stats" aria-live="polite">
+      <div><strong id="sTotal">0</strong><span>Songs</span></div>
+      <div class="ok"><strong id="sExact">0</strong><span>Exact</span></div>
+      <div><strong id="sClose">0</strong><span>Close</span></div>
+      <div class="bad"><strong id="sNone">0</strong><span>Not found</span></div>
+      <div><strong id="sLeft">0</strong><span>To check</span></div>
+    </div>
+    <div class="bar" aria-hidden="true"><i id="barFill"></i></div>
+    <div class="row">
+      <button class="primary" type="button" id="matchBtn" disabled>Start matching</button>
+      <button type="button" id="retryBtn" hidden>Search again for not found</button>
+      <span class="muted" id="matchStatus" role="status"></span>
+    </div>
+  </section>
+
+  <section class="step" aria-labelledby="h3s">
+    <h2 id="h3s"><b>3</b>Review the matches</h2>
+    <p class="muted">Exact matches are used as they are. Close matches are used too unless you pick something else or skip them, so they're worth a look. Not found songs can be searched by hand.</p>
+    <div class="chips" role="group" aria-label="Show">
+      <button type="button" class="chip" data-filter="close" aria-pressed="true">Close · <span data-count="close">0</span></button>
+      <button type="button" class="chip" data-filter="none" aria-pressed="false">Not found · <span data-count="none">0</span></button>
+      <button type="button" class="chip" data-filter="skipped" aria-pressed="false">Skipped · <span data-count="skipped">0</span></button>
+      <button type="button" class="chip" data-filter="exact" aria-pressed="false">Exact · <span data-count="exact">0</span></button>
+    </div>
+    <input type="search" id="reviewSearch" placeholder="Filter by title or artist" aria-label="Filter the review list">
+    <div class="list" id="reviewList"></div>
+    <button type="button" id="moreBtn" hidden>Show more</button>
+  </section>
+
+  <section class="step" aria-labelledby="h4s">
+    <h2 id="h4s"><b>4</b>Send to Spotify</h2>
+    <label class="check"><input type="checkbox" id="sendLiked" checked> <span>Add every matched song to <strong>Liked Songs</strong> (<span id="likedCount">0 songs</span>; oldest first, so your newest additions end up on top)</span></label>
+    <div class="row"><strong style="font-size:14px">Playlists to recreate</strong><button type="button" id="plAll">All</button><button type="button" id="plNone">None</button></div>
+    <div class="pls" id="plList"></div>
+    <p class="muted">Playlists are created as private playlists with the same name and order; songs without a match are left out. Running this again skips anything already sent.</p>
+    <div class="row">
+      <button class="primary" type="button" id="sendBtn" disabled>Send to Spotify</button>
+      <span class="muted" id="sendStatus" role="status"></span>
+    </div>
+    <div class="log" id="log" hidden></div>
+  </section>
+</div>
+
+<script>
+(function () {
+  const CLIENT_ID = "7a1b81580d3842c7aa6c646b75c9a798";
+  const REDIRECT_URI = location.origin + "/";
+  const SCOPES = "user-library-read user-library-modify playlist-read-private playlist-modify-private playlist-modify-public";
+  const API = "https://api.spotify.com/v1";
+  const $ = id => document.getElementById(id);
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  // ---------- storage (same IndexedDB as Crate, plus localStorage for the sign-in) ----------
+  const store = (() => {
+    let dbp = null;
+    const db = () => dbp || (dbp = new Promise((resolve, reject) => {
+      const r = indexedDB.open("crate-playlist-builder", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("kv");
+      r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error);
+    }));
+    const run = (mode, fn) => db().then(d => new Promise((resolve, reject) => {
+      const tx = d.transaction("kv", mode); const req = fn(tx.objectStore("kv"));
+      tx.oncomplete = () => resolve(req && req.result); tx.onerror = () => reject(tx.error);
+    }));
+    return { get: k => run("readonly", s => s.get(k)).catch(() => undefined), set: (k, v) => run("readwrite", s => s.put(v, k)).catch(() => false) };
+  })();
+  const ls = {
+    get: k => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch (e) { return null; } },
+    set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+  };
+
+  // ---------- sign-in (authorization code with PKCE; no client secret in the page) ----------
+  const b64url = bytes => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const randomString = n => { const a = new Uint8Array(n); crypto.getRandomValues(a); return b64url(a); };
+  let auth = ls.get("crate-spotify-auth");  // {access, refresh, expiresAt}
+
+  async function connect() {
+    const verifier = randomString(64), state = "sp_" + randomString(16);
+    const challenge = b64url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))));
+    ls.set("crate-spotify-pkce", { verifier, state });
+    const q = new URLSearchParams({ response_type: "code", client_id: CLIENT_ID, scope: SCOPES, redirect_uri: REDIRECT_URI, code_challenge_method: "S256", code_challenge: challenge, state });
+    location.assign("https://accounts.spotify.com/authorize?" + q);
+  }
+  async function tokenRequest(params) {
+    const r = await fetch("https://accounts.spotify.com/api/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ client_id: CLIENT_ID, ...params }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error_description || j.error || "Spotify sign-in failed");
+    auth = { access: j.access_token, refresh: j.refresh_token || auth?.refresh, expiresAt: Date.now() + (j.expires_in - 60) * 1000 };
+    ls.set("crate-spotify-auth", auth);
+  }
+  async function finishSignIn() {
+    const q = new URLSearchParams(location.search);
+    if (!q.has("code") && !q.has("error")) return;
+    const pkce = ls.get("crate-spotify-pkce"); ls.set("crate-spotify-pkce", null);
+    history.replaceState(null, "", location.pathname);
+    if (q.get("error")) { showError(q.get("error") === "access_denied" ? "Spotify sign-in was cancelled." : `Spotify sign-in failed: ${q.get("error")}`); return; }
+    if (!pkce || pkce.state !== q.get("state")) { showError("That sign-in reply didn't match this browser. Press Connect Spotify again."); return; }
+    try { await tokenRequest({ grant_type: "authorization_code", code: q.get("code"), redirect_uri: REDIRECT_URI, code_verifier: pkce.verifier }); }
+    catch (e) { showError(`Spotify sign-in failed: ${e.message}`); }
+  }
+  async function accessToken() {
+    if (!auth) throw Object.assign(new Error("Not connected to Spotify."), { fatal: true });
+    if (Date.now() > auth.expiresAt) {
+      try { await tokenRequest({ grant_type: "refresh_token", refresh_token: auth.refresh }); }
+      catch (e) { disconnect(); throw Object.assign(new Error("Your Spotify sign-in expired. Press Connect Spotify again."), { fatal: true }); }
+    }
+    return auth.access;
+  }
+  function disconnect() { auth = null; ls.set("crate-spotify-auth", null); renderAuth(); }
+
+  // ---------- API calls, with Spotify's rate limit honoured ----------
+  let pauseUntil = 0;
+  async function api(path, { method = "GET", body, query } = {}) {
+    const url = API + path + (query ? "?" + new URLSearchParams(query) : "");
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const wait = pauseUntil - Date.now(); if (wait > 0) await sleep(wait);
+      const token = await accessToken();
+      let r;
+      try { r = await fetch(url, { method, headers: { Authorization: "Bearer " + token, ...(body ? { "Content-Type": "application/json" } : {}) }, body: body ? JSON.stringify(body) : undefined }); }
+      catch (e) { await sleep(1500 * (attempt + 1)); continue; }  // network blip
+      if (r.status === 429) { pauseUntil = Date.now() + (Number(r.headers.get("Retry-After")) || 5) * 1000 + 300; continue; }
+      if (r.status === 401 && attempt === 0) { auth.expiresAt = 0; continue; }
+      if (r.status >= 500) { await sleep(1500 * (attempt + 1)); continue; }
+      if (!r.ok) {
+        let msg = ""; try { msg = (await r.json()).error?.message || ""; } catch (e) {}
+        const err = new Error(msg || `Spotify answered ${r.status}`); err.status = r.status;
+        if (r.status === 403) { err.fatal = true; err.message = "Spotify refused access (403). Check that your account has Premium and is listed under User Management in your Spotify developer app." + (msg ? ` Spotify said: ${msg}` : ""); }
+        throw err;
+      }
+      return r.status === 204 ? null : r.json().catch(() => null);
+    }
+    throw Object.assign(new Error("Spotify kept refusing requests. Wait a few minutes and try again."), { fatal: true });
+  }
+
+  // ---------- library from Crate ----------
+  let library = null;            // {tracks, playlists}
+  let matches = {};              // apple persistent ID -> {status, uri, cands, skip, chosen}
+  let sent = { liked: 0, playlists: {} };
+
+  // ---------- matching ----------
+  const norm = s => (s || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase()
+    .replace(/\(.*?\)|\[.*?\]/g, " ").replace(/\s-\s.*$/, " ").replace(/\b(feat|ft|featuring)\b.*$/, " ")
+    .replace(/&/g, " and ").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  const forQuery = s => (s || "").replace(/\(.*?\)|\[.*?\]/g, " ").replace(/\s-\s.*$/, " ").replace(/["']/g, " ").replace(/\s+/g, " ").trim();
+  const primaryArtist = s => forQuery((s || "").split(/\s(?:&|and|x|feat\.?|ft\.?|featuring)\s|,|;|\//i)[0]);
+  const summarize = t => ({ uri: t.uri, name: t.name, artist: (t.artists || []).map(a => a.name).join(", "), album: t.album?.name || "", ms: t.duration_ms || 0, url: t.external_urls?.spotify || "" });
+  function level(apple, c) {
+    const an = norm(apple.name), cn = norm(c.name);
+    const nameScore = an && an === cn ? 3 : an && cn && (an.includes(cn) || cn.includes(an)) ? 2 : 0;
+    const aa = norm(apple.artist || apple.albumArtist);
+    const artistOk = !!aa && c.artist.split(", ").some(x => { const n = norm(x); return n && (n === aa || aa.includes(n) || n.includes(aa)); });
+    const albumOk = !!apple.album && norm(apple.album) === norm(c.album);
+    const dur = apple.ms && c.ms ? Math.abs(apple.ms - c.ms) : Infinity;
+    const score = nameScore * 10 + (artistOk ? 8 : 0) + (albumOk ? 4 : 0) + (dur <= 3000 ? 3 : dur <= 10000 ? 1 : dur > 30000 && dur !== Infinity ? -4 : 0);
+    const lvl = nameScore === 3 && artistOk && (albumOk || dur <= 3000) ? "exact"
+      : (nameScore >= 2 && artistOk) || (nameScore === 3 && dur <= 3000) ? "close" : "none";
+    return { score, lvl };
+  }
+  async function search(q) {
+    const j = await api("/search", { query: { q, type: "track", limit: "10", market: "from_token" } });
+    return (j?.tracks?.items || []).filter(Boolean).map(summarize);
+  }
+  async function matchTrack(t) {
+    const name = forQuery(t.name), artist = primaryArtist(t.artist || t.albumArtist);
+    if (!name) return { status: "none", cands: [] };
+    let cands = await search(artist ? `track:"${name}" artist:"${artist}"` : `track:"${name}"`);
+    const rank = list => list.map(c => ({ c, ...level(t, c) })).sort((x, y) => y.score - x.score);
+    let ranked = rank(cands);
+    if (!ranked.length || ranked[0].lvl !== "exact") {
+      const more = await search(`${name} ${artist}`.trim());
+      const seen = new Set(cands.map(c => c.uri));
+      cands = cands.concat(more.filter(c => !seen.has(c.uri)));
+      ranked = rank(cands);
+    }
+    const best = ranked[0];
+    return { status: best && best.lvl !== "none" ? best.lvl : "none", uri: best && best.lvl !== "none" ? best.c.uri : "", cands: ranked.slice(0, 5).map(r => r.c) };
+  }
+
+  let running = false, saveTimer;
+  // Save at most every couple of seconds while matching runs (a resetting debounce would never fire mid-run).
+  const saveMatches = () => { if (!saveTimer) saveTimer = setTimeout(() => { saveTimer = null; store.set("spotify:matches", matches); }, 2000); };
+  const saveMatchesNow = () => { clearTimeout(saveTimer); saveTimer = null; return store.set("spotify:matches", matches); };
+  addEventListener("pagehide", () => { if (saveTimer) saveMatchesNow(); });
+  async function runMatching(onlyNone) {
+    if (running) { running = false; $("matchBtn").textContent = "Stopping…"; return; }
+    const queue = library.tracks.filter(t => onlyNone ? matches[t.pid]?.status === "none" && !matches[t.pid]?.chosen : !matches[t.pid]);
+    if (!queue.length) return;
+    running = true; renderMatchButtons();
+    let i = 0, fatal = null;
+    const worker = async () => {
+      while (running && i < queue.length && !fatal) {
+        const t = queue[i++];
+        try { matches[t.pid] = await matchTrack(t); }
+        catch (e) { if (e.fatal) { fatal = e; break; } matches[t.pid] = { status: "none", cands: [], error: true }; }
+        renderStats(); saveMatches();
+      }
+    };
+    await Promise.all([worker(), worker()]);
+    running = false; await saveMatchesNow(); renderAll();
+    if (fatal) showError(fatal.message);
+    $("matchStatus").textContent = fatal ? "" : i < queue.length ? "Paused." : "Done.";
+  }
+
+  // ---------- review ----------
+  let filter = "close", shownCount = 100;
+  const effective = m => !m ? "pending" : m.skip ? "skipped" : m.chosen ? "exact" : m.status;
+  function counts() {
+    const c = { exact: 0, close: 0, none: 0, skipped: 0, pending: 0 };
+    for (const t of library.tracks) c[effective(matches[t.pid])]++;
+    return c;
+  }
+  const chosenUri = m => m && !m.skip ? m.uri : "";
+  function renderReview() {
+    const list = $("reviewList"); list.textContent = "";
+    const q = $("reviewSearch").value.trim().toLowerCase();
+    const items = library.tracks.filter(t => {
+      const m = matches[t.pid]; if (!m) return false;
+      const f = m.skip ? "skipped" : m.chosen ? "exact" : m.status;
+      if (f !== filter) return false;
+      return !q || `${t.name} ${t.artist} ${t.album}`.toLowerCase().includes(q);
+    });
+    if (!items.length) { const e = document.createElement("p"); e.className = "muted"; e.style.padding = "12px"; e.textContent = library.tracks.some(t => matches[t.pid]) ? "Nothing in this group." : "Matches appear here once step 2 has run."; list.appendChild(e); }
+    for (const t of items.slice(0, shownCount)) list.appendChild(reviewItem(t, matches[t.pid]));
+    $("moreBtn").hidden = items.length <= shownCount;
+    $("moreBtn").textContent = `Show more (${(items.length - shownCount).toLocaleString()} left)`;
+  }
+  function songBlock(name, sub) {
+    const d = document.createElement("div"); d.className = "song";
+    const b = document.createElement("b"); b.textContent = name; b.title = name;
+    const s = document.createElement("small"); s.textContent = sub; s.title = sub;
+    d.append(b, s); return d;
+  }
+  const fmt = ms => ms ? `${Math.floor(ms / 60000)}:${String(Math.round(ms / 1000) % 60).padStart(2, "0")}` : "";
+  function reviewItem(t, m) {
+    const row = document.createElement("div"); row.className = "item";
+    row.appendChild(songBlock(t.name, [t.artist || t.albumArtist, t.album, fmt(t.ms)].filter(Boolean).join(" · ")));
+    const pick = document.createElement("div"); pick.className = "pick";
+    const tag = document.createElement("span"); const st = effective(m);
+    tag.className = "tag " + st; tag.textContent = m.chosen && !m.skip ? "your pick" : { exact: "exact", close: "close", none: "not found", skipped: "skipped" }[st];
+    pick.appendChild(tag);
+    const sel = document.createElement("select"); sel.setAttribute("aria-label", `Spotify match for ${t.name}`);
+    const opt = (v, label) => { const o = document.createElement("option"); o.value = v; o.textContent = label; sel.appendChild(o); };
+    for (const c of m.cands || []) opt(c.uri, `${c.name} — ${c.artist} · ${c.album}${c.ms ? " · " + fmt(c.ms) : ""}`);
+    opt("", m.cands?.length ? "Skip this song" : "No match: skip this song");
+    sel.value = m.skip ? "" : m.uri || "";
+    sel.addEventListener("change", () => {
+      if (sel.value) { m.uri = sel.value; m.skip = false; m.chosen = true; } else { m.skip = true; }
+      saveMatches(); renderStats(); renderSendCounts();
+      tag.className = "tag " + effective(m); tag.textContent = m.skip ? "skipped" : "your pick";
+    });
+    pick.appendChild(sel);
+    const cur = (m.cands || []).find(c => c.uri === sel.value);
+    if (cur?.url) { const a = document.createElement("a"); a.href = cur.url; a.target = "_blank"; a.rel = "noopener"; a.textContent = "Open in Spotify"; a.className = "muted"; pick.appendChild(a); }
+    // Search by hand
+    const srow = document.createElement("div"); srow.className = "row";
+    const input = document.createElement("input"); input.type = "text"; input.value = `${forQuery(t.name)} ${primaryArtist(t.artist || t.albumArtist)}`.trim(); input.setAttribute("aria-label", `Search Spotify for ${t.name}`);
+    const go = document.createElement("button"); go.type = "button"; go.textContent = "Search";
+    go.addEventListener("click", async () => {
+      go.disabled = true; go.textContent = "Searching…";
+      try {
+        const found = await search(input.value);
+        m.cands = found.concat((m.cands || []).filter(c => !found.some(f => f.uri === c.uri))).slice(0, 10);
+        if (found.length) { m.uri = found[0].uri; m.chosen = true; m.skip = false; }
+        saveMatches(); renderStats(); renderSendCounts();
+        row.replaceWith(reviewItem(t, m));
+      } catch (e) { showError(e.message); go.disabled = false; go.textContent = "Search"; }
+    });
+    input.addEventListener("keydown", e => { if (e.key === "Enter") go.click(); });
+    srow.append(input, go); pick.appendChild(srow);
+    row.appendChild(pick);
+    return row;
+  }
+
+  // ---------- sending ----------
+  const playlistKey = p => p.pid || p.name;
+  function likedUris() {
+    const order = library.tracks.slice().sort((a, b) => (a.added || "").localeCompare(b.added || ""));
+    const seen = new Set(), out = [];
+    for (const t of order) { const u = chosenUri(matches[t.pid]); if (u && !seen.has(u)) { seen.add(u); out.push(u); } }
+    return out;
+  }
+  const byPid = () => new Map(library.tracks.map(t => [t.id, t.pid]));
+  function playlistUris(p, pidOf) { return p.ids.map(id => chosenUri(matches[pidOf.get(id)])).filter(Boolean); }
+  const log = (text, href) => {
+    const el = $("log"); el.hidden = false;
+    const line = document.createElement("div"); line.textContent = text;
+    if (href) { const a = document.createElement("a"); a.href = href; a.target = "_blank"; a.rel = "noopener"; a.textContent = " open"; line.appendChild(a); }
+    el.appendChild(line); el.scrollTop = el.scrollHeight;
+  };
+  let likedMode = null;  // "query" or "body": how Spotify's library endpoint wants the URIs
+  async function saveToLibrary(uris) {
+    const modes = likedMode ? [likedMode] : ["query", "body"];
+    let last;
+    for (const mode of modes) {
+      try {
+        if (mode === "query") await api("/me/library", { method: "PUT", query: { uris: uris.join(",") } });
+        else await api("/me/library", { method: "PUT", body: { uris } });
+        likedMode = mode; return;
+      } catch (e) { last = e; if (e.fatal || e.status === 401) throw e; }
+    }
+    throw last;
+  }
+  async function send() {
+    const btn = $("sendBtn"); btn.disabled = true;
+    $("log").textContent = "";
+    const pidOf = byPid();
+    try {
+      if ($("sendLiked").checked) {
+        const uris = likedUris();
+        let batch = 40; const startedAt = sent.liked;
+        if (sent.liked >= uris.length && uris.length) log(`Liked Songs: already sent (${uris.length.toLocaleString()} songs).`);
+        while (sent.liked < uris.length) {
+          const chunk = uris.slice(sent.liked, sent.liked + batch);
+          try { await saveToLibrary(chunk); }
+          catch (e) { if (!e.fatal && e.status === 400 && batch > 1) { batch = Math.max(1, Math.floor(batch / 2)); continue; } throw e; }
+          sent.liked += chunk.length; await store.set("spotify:sent", sent);
+          $("sendStatus").textContent = `Liked Songs: ${sent.liked.toLocaleString()} of ${uris.length.toLocaleString()}`;
+        }
+        if (sent.liked > startedAt) log(`Liked Songs: ${(sent.liked - startedAt).toLocaleString()} songs added.`);
+      }
+      const chosen = [...document.querySelectorAll("#plList input:checked")].map(i => library.playlists[Number(i.value)]);
+      for (const p of chosen) {
+        const key = playlistKey(p), uris = playlistUris(p, pidOf);
+        let rec = sent.playlists[key];
+        if (rec && rec.added >= uris.length) { log(`${p.name}: already sent.`, rec.url); continue; }
+        if (!rec) {
+          const made = await api("/me/playlists", { method: "POST", body: { name: p.name, public: false, description: "Copied from Apple Music with Crate" } });
+          rec = sent.playlists[key] = { id: made.id, url: made.external_urls?.spotify || "", added: 0 };
+          await store.set("spotify:sent", sent);
+        }
+        while (rec.added < uris.length) {
+          const chunk = uris.slice(rec.added, rec.added + 100);
+          await api(`/playlists/${rec.id}/items`, { method: "POST", body: { uris: chunk } });
+          rec.added += chunk.length; await store.set("spotify:sent", sent);
+          $("sendStatus").textContent = `${p.name}: ${rec.added} of ${uris.length}`;
+        }
+        const missing = p.ids.length - uris.length;
+        log(`${p.name}: ${uris.length} songs${missing ? `, ${missing} without a match left out` : ""}.`, rec.url);
+      }
+      $("sendStatus").textContent = "Done. Open Spotify to see them (it can take a minute to show up).";
+    } catch (e) {
+      showError(e.message); $("sendStatus").textContent = "Stopped. Press Send again to continue where it left off.";
+    }
+    btn.disabled = false; renderSendCounts();
+  }
+
+  // ---------- rendering ----------
+  function showError(msg) { const b = $("libBanner"); b.hidden = false; b.className = "banner error"; b.textContent = msg; b.scrollIntoView({ block: "nearest" }); }
+  async function renderAuth() {
+    $("connectBtn").hidden = !!auth; $("disconnectBtn").hidden = !auth;
+    if (!auth) { $("authText").textContent = "Sign in to the Spotify account you want to copy into. Crate talks to Spotify straight from this browser; nothing goes through any other server."; renderMatchButtons(); return; }
+    $("authText").textContent = "Connected to Spotify.";
+    try { const me = await api("/me"); $("authText").textContent = `Connected as ${me?.display_name || me?.id || "your Spotify account"}.`; }
+    catch (e) { if (e.fatal) showError(e.message); }
+    renderMatchButtons();
+  }
+  function renderStats() {
+    if (!library) return;
+    const c = counts();
+    $("sTotal").textContent = library.tracks.length.toLocaleString();
+    $("sExact").textContent = c.exact.toLocaleString(); $("sClose").textContent = c.close.toLocaleString();
+    $("sNone").textContent = (c.none + c.skipped).toLocaleString(); $("sLeft").textContent = c.pending.toLocaleString();
+    $("barFill").style.width = `${library.tracks.length ? 100 * (library.tracks.length - c.pending) / library.tracks.length : 0}%`;
+    for (const k of ["close", "none", "skipped", "exact"]) document.querySelector(`[data-count="${k}"]`).textContent = c[k].toLocaleString();
+    if (running) $("matchStatus").textContent = pauseUntil > Date.now() ? "Spotify asked us to slow down; waiting…" : `Checking… ${c.pending.toLocaleString()} to go`;
+  }
+  function renderMatchButtons() {
+    if (!library) return;
+    const c = counts();
+    $("matchBtn").disabled = !auth || (!running && !c.pending);
+    $("matchBtn").textContent = running ? "Pause" : c.pending === library.tracks.length ? "Start matching" : c.pending ? "Continue matching" : "All songs checked";
+    $("retryBtn").hidden = running || !auth || c.pending > 0 || !library.tracks.some(t => matches[t.pid]?.error);
+    $("sendBtn").disabled = !auth || running || !likedUris().length;
+  }
+  function renderSendCounts() {
+    if (!library) return;
+    const uris = likedUris();
+    $("likedCount").textContent = `${uris.length.toLocaleString()} songs` + (sent.liked && sent.liked < uris.length ? `, ${sent.liked.toLocaleString()} already sent` : sent.liked >= uris.length && uris.length ? ", all sent" : "");
+    const pidOf = byPid();
+    document.querySelectorAll("#plList label").forEach(l => {
+      const p = library.playlists[Number(l.querySelector("input").value)];
+      const n = playlistUris(p, pidOf).length, done = sent.playlists[playlistKey(p)];
+      l.querySelector("small").textContent = `${n} of ${p.ids.length} matched${done ? (done.added >= n ? " · sent" : ` · ${done.added} sent`) : ""}`;
+    });
+    renderMatchButtons();
+  }
+  function renderPlaylists() {
+    const box = $("plList"); box.textContent = "";
+    if (!library.playlists.length) { box.textContent = "No playlists in your library file."; return; }
+    const saved = ls.get("crate-spotify-playlists");
+    library.playlists.map((p, i) => [p, i]).sort((a, b) => a[0].name.localeCompare(b[0].name)).forEach(([p, i]) => {
+      const l = document.createElement("label");
+      const cb = document.createElement("input"); cb.type = "checkbox"; cb.value = i; cb.checked = saved ? saved.includes(playlistKey(p)) : true;
+      cb.addEventListener("change", savePlaylistChoice);
+      const nm = document.createElement("span"); nm.textContent = p.name + (p.smart ? " (smart playlist, copied as it is now)" : "");
+      l.append(cb, nm, document.createElement("small")); box.appendChild(l);
+    });
+  }
+  function savePlaylistChoice() { ls.set("crate-spotify-playlists", [...document.querySelectorAll("#plList input:checked")].map(i => playlistKey(library.playlists[Number(i.value)]))); }
+  function renderAll() { renderStats(); renderReview(); renderSendCounts(); }
+
+  // ---------- wiring ----------
+  $("connectBtn").addEventListener("click", connect);
+  $("disconnectBtn").addEventListener("click", disconnect);
+  $("matchBtn").addEventListener("click", () => runMatching(false));
+  $("retryBtn").addEventListener("click", () => { for (const t of library.tracks) if (matches[t.pid]?.error) delete matches[t.pid]; runMatching(false); });
+  document.querySelectorAll(".chip").forEach(b => b.addEventListener("click", () => {
+    filter = b.dataset.filter; shownCount = 100;
+    document.querySelectorAll(".chip").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    renderReview();
+  }));
+  let reviewTimer; $("reviewSearch").addEventListener("input", () => { clearTimeout(reviewTimer); reviewTimer = setTimeout(() => { shownCount = 100; renderReview(); }, 200); });
+  $("moreBtn").addEventListener("click", () => { shownCount += 100; renderReview(); });
+  $("plAll").addEventListener("click", () => { document.querySelectorAll("#plList input").forEach(i => i.checked = true); savePlaylistChoice(); });
+  $("plNone").addEventListener("click", () => { document.querySelectorAll("#plList input").forEach(i => i.checked = false); savePlaylistChoice(); });
+  $("sendBtn").addEventListener("click", send);
+  setInterval(() => { if (running) renderStats(); }, 1000);
+
+  (async () => {
+    await finishSignIn();
+    const saved = await store.get("library");
+    if (!saved || !saved.tracks) {
+      $("libBanner").innerHTML = 'No library found in this browser. <a href="./">Load your library file in Crate</a> first, then come back here.';
+      renderAuth(); return;
+    }
+    library = { tracks: saved.tracks, playlists: saved.playlists || [] };
+    matches = (await store.get("spotify:matches")) || {};
+    sent = (await store.get("spotify:sent")) || { liked: 0, playlists: {} };
+    const when = saved.loadedAt ? new Date(saved.loadedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
+    const old = !library.tracks.some(t => "added" in t);
+    $("libBanner").textContent = `Using ${saved.fileName || "your library"}${when ? ` from ${when}` : ""}: ${library.tracks.length.toLocaleString()} songs, ${library.playlists.length} playlists.`
+      + (old ? " Load the file again in Crate to include smart playlists and keep Liked Songs in date-added order." : "");
+    renderPlaylists(); renderAll(); renderAuth();
+  })();
+})();
+</script>
+</body>
+</html>

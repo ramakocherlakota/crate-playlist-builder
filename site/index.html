@@ -78,6 +78,8 @@ button:hover { background: var(--hover); }
 button.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 600; }
 button.primary:hover { filter: brightness(1.08); background: var(--accent); }
 button:disabled { opacity: .5; cursor: not-allowed; }
+a.button { font-size: 14px; border-radius: 8px; padding: 7px 12px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); text-decoration: none; display: inline-flex; align-items: center; }
+a.button:hover { background: var(--hover); }
 .toggles { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 13.5px; color: var(--muted); align-items: center; }
 .toggles label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
 .toggles select { padding: 3px 6px; font-size: 13.5px; }
@@ -182,6 +184,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
     </div>
     <div class="btns">
       <input type="file" id="file" class="sr">
+      <a class="button" href="spotify.html">Copy to Spotify</a>
       <button type="button" id="helpBtn" aria-expanded="true" aria-controls="steps howto">Hide instructions</button>
       <button class="primary" id="loadBtn" type="button">Load library file</button>
     </div>
@@ -290,6 +293,8 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
 
 <script>
 (function () {
+  // Spotify sign-in returns to the site root; hand the reply to the Spotify page.
+  if (/[?&](code|error)=/.test(location.search) && /[?&]state=sp_/.test(location.search)) { location.replace("spotify.html" + location.search); return; }
   // ---------- sample library (examples only) ----------
   const SAMPLE = [
     ["Radiohead", "OK Computer", 1997, ["Airbag",284,"Paranoid Android",383,"Subterranean Homesick Alien",267,"Exit Music (For a Film)",264,"Let Down",299,"Karma Police",261,"No Surprises",229,"Lucky",259]],
@@ -348,13 +353,14 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
         id: String(t["Track ID"]), pid: t["Persistent ID"], name: t.Name || "Untitled",
         artist: t.Artist || "", albumArtist: t["Album Artist"] || "", album: t.Album || "",
         sortAlbumArtist: t["Sort Album Artist"] || "", sortArtist: t["Sort Artist"] || "", sortAlbum: t["Sort Album"] || "",
-        year: t.Year || 0, disc: t["Disc Number"] || 1, num: t["Track Number"] || 0, ms: t["Total Time"] || 0
+        year: t.Year || 0, disc: t["Disc Number"] || 1, num: t["Track Number"] || 0, ms: t["Total Time"] || 0,
+        added: t["Date Added"] || ""
       });
     }
     const valid = new Set(tracks.map(t => t.id));
     const playlists = (lib.Playlists || [])
-      .filter(p => !p.Master && !p["Distinguished Kind"] && !p.Folder && !p["Smart Info"] && p["Playlist Items"])
-      .map(p => ({ name: p.Name, pid: p["Playlist Persistent ID"] || "", ids: p["Playlist Items"].map(i => String(i["Track ID"])).filter(id => valid.has(id)) }))
+      .filter(p => !p.Master && !p["Distinguished Kind"] && !p.Folder && p["Playlist Items"])
+      .map(p => ({ name: p.Name, pid: p["Playlist Persistent ID"] || "", smart: !!p["Smart Info"], ids: p["Playlist Items"].map(i => String(i["Track ID"])).filter(id => valid.has(id)) }))
       .filter(p => p.ids.length);
     return { tracks, playlists, sample: false };
   }
@@ -899,7 +905,7 @@ display dialog "Done." & return & return & reportText buttons {"OK"} default but
     const isOpen = p => drafts.some(d => d.orig && ((p.pid && d.origPid === p.pid) || d.origName === p.name));
     let shown = 0;
     library.playlists.forEach((p, i) => {
-      if (isOpen(p)) return;
+      if (p.smart || isOpen(p)) return;  // Music won't let a script edit smart playlists
       const o = document.createElement("option"); o.value = i; o.textContent = `${p.name} (${p.ids.length})`; sel.appendChild(o); shown++;
     });
     sel.disabled = !shown;

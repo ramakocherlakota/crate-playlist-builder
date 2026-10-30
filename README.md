@@ -15,7 +15,13 @@ Live at **https://crate.ramakocherlakota.net**
 
 The script applies only what you changed: unticked songs are removed, newly ticked songs are added at the end (existing order is kept), and a renamed playlist is renamed in Music. Anything already done is skipped, so scripts made on different devices can be run in any order, and running one twice is harmless. **Show changes** lists exactly which songs each playlist will gain or lose (with a per-song Undo). After exporting a script, **Mark as applied** resets the change counts so the next script only carries newer edits.
 
-The whole app is one static file: [`site/index.html`](site/index.html).
+## Copy to Spotify
+
+[`site/spotify.html`](site/spotify.html) copies the library loaded in Crate into Spotify: matched songs into Liked Songs (oldest first) and chosen playlists recreated as private playlists. It signs in with Spotify's PKCE flow straight from the browser (no server, no client secret), looks each song up by title/artist/album with Spotify's rate limits honoured, saves progress in IndexedDB so it can resume, and lets you review close matches and search for missing songs before sending. Re-sending skips anything already sent.
+
+Spotify setup: a Spotify developer app with redirect URI `https://crate.ramakocherlakota.net/` and the Web API enabled. Since February 2026 Spotify requires the app owner to have Premium, and development-mode apps are limited to 5 users. The Spotify sign-in returns to the site root, which forwards to `spotify.html`.
+
+The app is two static files: [`site/index.html`](site/index.html) and [`site/spotify.html`](site/spotify.html).
 
 ## Hosting
 
