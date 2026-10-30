@@ -909,7 +909,8 @@ display dialog "Done." & return & return & reportText buttons {"OK"} default but
       const o = document.createElement("option"); o.value = i; o.textContent = `${p.name} (${p.ids.length})`; sel.appendChild(o); shown++;
     });
     sel.disabled = !shown;
-    sel.options[0].textContent = !library.playlists.length ? "No playlists in this file (use Export Library)"
+    const editable = library.playlists.filter(p => !p.smart).length;
+    sel.options[0].textContent = !editable ? (library.playlists.length ? "No editable playlists (smart playlists can't be edited)" : "No playlists in this file (use Export Library)")
       : shown ? "Edit an existing playlist…" : "All your playlists are open";
   }
 
@@ -963,7 +964,7 @@ display dialog "Done." & return & return & reportText buttons {"OK"} default but
       if (origName != null) {
         // A library exported after this draft's starting point is the newer truth (e.g. after running a script);
         // otherwise keep the saved starting point, which "Mark as applied" may have moved forward.
-        const pl = library.playlists.find(p => (origPid && p.pid === origPid) || p.name === origName);
+        const pl = library.playlists.find(p => !p.smart && ((origPid && p.pid === origPid) || p.name === origName));
         if (pl && (library.loadedAt || 0) >= origAt) { orig = new Set(pl.ids); origName = pl.name; origPid = pl.pid || origPid; origAt = library.loadedAt || 0; }
         else orig = new Set((d.origPids || []).map(p => idOf.get(p)).filter(Boolean));
       }

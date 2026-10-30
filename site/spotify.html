@@ -149,10 +149,10 @@ input[type="text"], input[type="search"], select { font: inherit; font-size: 14p
 
   <section class="step" aria-labelledby="h4s">
     <h2 id="h4s"><b>4</b>Send to Spotify</h2>
-    <label class="check"><input type="checkbox" id="sendLiked" checked> <span>Add every matched song to <strong>Liked Songs</strong> (<span id="likedCount">0 songs</span>; oldest first, so your newest additions end up on top)</span></label>
+    <label class="check"><input type="checkbox" id="sendLiked" checked> <span>Add every matched song to <strong>Liked Songs</strong> (<span id="likedCount">0 songs</span>; sent oldest first, so your newest additions end up roughly on top)</span></label>
     <div class="row"><strong style="font-size:14px">Playlists to recreate</strong><button type="button" id="plAll">All</button><button type="button" id="plNone">None</button></div>
     <div class="pls" id="plList"></div>
-    <p class="muted">Playlists are created as private playlists with the same name and order; songs without a match are left out. Running this again skips anything already sent.</p>
+    <p class="muted">Playlists are created as private playlists with the same name and order; songs without a match are left out. Running this again only adds what's missing, so it's safe after changing picks or finding more songs (late additions go at the end of a playlist).</p>
     <div class="row">
       <button class="primary" type="button" id="sendBtn" disabled>Send to Spotify</button>
       <span class="muted" id="sendStatus" role="status"></span>
@@ -218,10 +218,13 @@ input[type="text"], input[type="search"], select { font: inherit; font-size: 14p
     try { await tokenRequest({ grant_type: "authorization_code", code: q.get("code"), redirect_uri: REDIRECT_URI, code_verifier: pkce.verifier }); }
     catch (e) { showError(`Spotify sign-in failed: ${e.message}`); }
   }
+  // One shared refresh: Spotify rotates refresh tokens, so two parallel refreshes would sign the user out.
+  let refreshing = null;
   async function accessToken() {
-    if (!auth) throw Object.assign(new Error("Not connected to Spotify."), { fatal: true });
+    if (!auth) throw Object.assign(new Error("Not connected to Spotify. Press Connect Spotify."), { fatal: true });
     if (Date.now() > auth.expiresAt) {
-      try { await tokenRequest({ grant_type: "refresh_token", refresh_token: auth.refresh }); }
+      refreshing = refreshing || tokenRequest({ grant_type: "refresh_token", refresh_token: auth.refresh }).finally(() => { refreshing = null; });
+      try { await refreshing; }
       catch (e) { disconnect(); throw Object.assign(new Error("Your Spotify sign-in expired. Press Connect Spotify again."), { fatal: true }); }
     }
     return auth.access;
@@ -230,17 +233,21 @@ input[type="text"], input[type="search"], select { font: inherit; font-size: 14p
 
   // ---------- API calls, with Spotify's rate limit honoured ----------
   let pauseUntil = 0;
+  // Requests that create something (POST) are not repeated after a lost response or server error,
+  // since Spotify may already have done the work; the caller reconciles instead.
   async function api(path, { method = "GET", body, query } = {}) {
     const url = API + path + (query ? "?" + new URLSearchParams(query) : "");
+    const repeatable = method !== "POST";
+    const unsure = () => Object.assign(new Error("Spotify didn't confirm the last change. Press Send again; it checks what's already there before adding more."), { unsure: true });
     for (let attempt = 0; attempt < 8; attempt++) {
       const wait = pauseUntil - Date.now(); if (wait > 0) await sleep(wait);
       const token = await accessToken();
       let r;
       try { r = await fetch(url, { method, headers: { Authorization: "Bearer " + token, ...(body ? { "Content-Type": "application/json" } : {}) }, body: body ? JSON.stringify(body) : undefined }); }
-      catch (e) { await sleep(1500 * (attempt + 1)); continue; }  // network blip
+      catch (e) { if (!repeatable) throw unsure(); await sleep(1500 * (attempt + 1)); continue; }  // network blip
       if (r.status === 429) { pauseUntil = Date.now() + (Number(r.headers.get("Retry-After")) || 5) * 1000 + 300; continue; }
-      if (r.status === 401 && attempt === 0) { auth.expiresAt = 0; continue; }
-      if (r.status >= 500) { await sleep(1500 * (attempt + 1)); continue; }
+      if (r.status === 401 && attempt === 0 && auth) { auth.expiresAt = 0; continue; }
+      if (r.status >= 500) { if (!repeatable) throw unsure(); await sleep(1500 * (attempt + 1)); continue; }
       if (!r.ok) {
         let msg = ""; try { msg = (await r.json()).error?.message || ""; } catch (e) {}
         const err = new Error(msg || `Spotify answered ${r.status}`); err.status = r.status;
@@ -255,7 +262,7 @@ input[type="text"], input[type="search"], select { font: inherit; font-size: 14p
   // ---------- library from Crate ----------
   let library = null;            // {tracks, playlists}
   let matches = {};              // apple persistent ID -> {status, uri, cands, skip, chosen}
-  let sent = { liked: 0, playlists: {} };
+  let sent = { likedUris: [], rejected: [], playlists: {} };
 
   // ---------- matching ----------
   const norm = s => (s || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase()
@@ -296,14 +303,17 @@ input[type="text"], input[type="search"], select { font: inherit; font-size: 14p
     return { status: best && best.lvl !== "none" ? best.lvl : "none", uri: best && best.lvl !== "none" ? best.c.uri : "", cands: ranked.slice(0, 5).map(r => r.c) };
   }
 
-  let running = false, saveTimer;
+  let running = false, stopping = false, saveTimer;
   // Save at most every couple of seconds while matching runs (a resetting debounce would never fire mid-run).
   const saveMatches = () => { if (!saveTimer) saveTimer = setTimeout(() => { saveTimer = null; store.set("spotify:matches", matches); }, 2000); };
   const saveMatchesNow = () => { clearTimeout(saveTimer); saveTimer = null; return store.set("spotify:matches", matches); };
   addEventListener("pagehide", () => { if (saveTimer) saveMatchesNow(); });
+  // onlyNone: look again for songs that weren't found (and weren't picked or skipped by hand).
   async function runMatching(onlyNone) {
-    if (running) { running = false; $("matchBtn").textContent = "Stopping…"; return; }
-    const queue = library.tracks.filter(t => onlyNone ? matches[t.pid]?.status === "none" && !matches[t.pid]?.chosen : !matches[t.pid]);
+    if (stopping) return;
+    // Pausing lets the in-flight lookups finish; the button stays disabled until they have.
+    if (running) { running = false; stopping = true; renderMatchButtons(); return; }
+    const queue = library.tracks.filter(t => { const m = matches[t.pid]; return onlyNone ? m && m.status === "none" && !m.chosen && !m.skip : !m; });
     if (!queue.length) return;
     running = true; renderMatchButtons();
     let i = 0, fatal = null;
@@ -312,11 +322,11 @@ input[type="text"], input[type="search"], select { font: inherit; font-size: 14p
         const t = queue[i++];
         try { matches[t.pid] = await matchTrack(t); }
         catch (e) { if (e.fatal) { fatal = e; break; } matches[t.pid] = { status: "none", cands: [], error: true }; }
-        renderStats(); saveMatches();
+        saveMatches();  // the 1-second interval redraws the counts
       }
     };
     await Promise.all([worker(), worker()]);
-    running = false; await saveMatchesNow(); renderAll();
+    running = false; stopping = false; await saveMatchesNow(); renderAll();
     if (fatal) showError(fatal.message);
     $("matchStatus").textContent = fatal ? "" : i < queue.length ? "Paused." : "Done.";
   }
@@ -335,8 +345,7 @@ input[type="text"], input[type="search"], select { font: inherit; font-size: 14p
     const q = $("reviewSearch").value.trim().toLowerCase();
     const items = library.tracks.filter(t => {
       const m = matches[t.pid]; if (!m) return false;
-      const f = m.skip ? "skipped" : m.chosen ? "exact" : m.status;
-      if (f !== filter) return false;
+      if (effective(m) !== filter) return false;
       return !q || `${t.name} ${t.artist} ${t.album}`.toLowerCase().includes(q);
     });
     if (!items.length) { const e = document.createElement("p"); e.className = "muted"; e.style.padding = "12px"; e.textContent = library.tracks.some(t => matches[t.pid]) ? "Nothing in this group." : "Matches appear here once step 2 has run."; list.appendChild(e); }
@@ -350,7 +359,7 @@ input[type="text"], input[type="search"], select { font: inherit; font-size: 14p
     const s = document.createElement("small"); s.textContent = sub; s.title = sub;
     d.append(b, s); return d;
   }
-  const fmt = ms => ms ? `${Math.floor(ms / 60000)}:${String(Math.round(ms / 1000) % 60).padStart(2, "0")}` : "";
+  const fmt = ms => { if (!ms) return ""; const s = Math.round(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
   function reviewItem(t, m) {
     const row = document.createElement("div"); row.className = "item";
     row.appendChild(songBlock(t.name, [t.artist || t.albumArtist, t.album, fmt(t.ms)].filter(Boolean).join(" · ")));
@@ -392,21 +401,31 @@ input[type="text"], input[type="search"], select { font: inherit; font-size: 14p
   }
 
   // ---------- sending ----------
+  // What was sent is tracked by song (URI), not by position, so changing a pick or finding a missing song
+  // later still sends exactly what's missing. Playlists are checked against Spotify itself before adding.
+  const DESCRIPTION = "Copied from Apple Music with Crate";
   const playlistKey = p => p.pid || p.name;
+  let likedOrder = [];  // library tracks, oldest Date Added first (computed once at load)
   function likedUris() {
-    const order = library.tracks.slice().sort((a, b) => (a.added || "").localeCompare(b.added || ""));
     const seen = new Set(), out = [];
-    for (const t of order) { const u = chosenUri(matches[t.pid]); if (u && !seen.has(u)) { seen.add(u); out.push(u); } }
+    for (const t of likedOrder) { const u = chosenUri(matches[t.pid]); if (u && !seen.has(u)) { seen.add(u); out.push(u); } }
     return out;
   }
+  const savedSet = () => new Set(sent.likedUris);
+  const rejectedSet = () => new Set(sent.rejected);
   const byPid = () => new Map(library.tracks.map(t => [t.id, t.pid]));
   function playlistUris(p, pidOf) { return p.ids.map(id => chosenUri(matches[pidOf.get(id)])).filter(Boolean); }
+  function songNameForUri(uri) {
+    for (const t of library.tracks) if (chosenUri(matches[t.pid]) === uri) return `${t.name} — ${t.artist || t.albumArtist}`;
+    return uri;
+  }
   const log = (text, href) => {
     const el = $("log"); el.hidden = false;
     const line = document.createElement("div"); line.textContent = text;
     if (href) { const a = document.createElement("a"); a.href = href; a.target = "_blank"; a.rel = "noopener"; a.textContent = " open"; line.appendChild(a); }
     el.appendChild(line); el.scrollTop = el.scrollHeight;
   };
+  const saveSent = () => store.set("spotify:sent", sent);
   let likedMode = null;  // "query" or "body": how Spotify's library endpoint wants the URIs
   async function saveToLibrary(uris) {
     const modes = likedMode ? [likedMode] : ["query", "body"];
@@ -420,46 +439,83 @@ input[type="text"], input[type="search"], select { font: inherit; font-size: 14p
     }
     throw last;
   }
+  async function sendLiked() {
+    const saved = savedSet(), rejected = rejectedSet();
+    const all = likedUris(), todo = all.filter(u => !saved.has(u) && !rejected.has(u));
+    if (!todo.length) { log(`Liked Songs: nothing new to add (${saved.size.toLocaleString()} already sent).`); return; }
+    let batch = 40, done = 0, i = 0;
+    while (i < todo.length) {
+      const chunk = todo.slice(i, i + batch);
+      try { await saveToLibrary(chunk); }
+      catch (e) {
+        if (e.fatal || e.status !== 400) throw e;
+        if (batch > 1) { batch = Math.max(1, Math.floor(batch / 2)); continue; }
+        // A single song Spotify won't accept: note it and move on instead of blocking every later send.
+        sent.rejected.push(chunk[0]); await saveSent();
+        log(`Liked Songs: Spotify wouldn't accept “${songNameForUri(chunk[0])}”, skipped.`);
+        i += 1; continue;
+      }
+      sent.likedUris.push(...chunk); await saveSent();
+      i += chunk.length; done += chunk.length;
+      if (batch < 40) batch = Math.min(40, batch * 2);
+      $("sendStatus").textContent = `Liked Songs: ${done.toLocaleString()} of ${todo.length.toLocaleString()}`;
+    }
+    log(`Liked Songs: ${done.toLocaleString()} song${done === 1 ? "" : "s"} added.`);
+  }
+  async function pagedItems(path, limit) {
+    const out = [];
+    for (let offset = 0; ; offset += limit) {
+      const j = await api(path, { query: { limit: String(limit), offset: String(offset) } });
+      const items = j?.items || [];
+      out.push(...items);
+      if (items.length < limit || (j.total != null && out.length >= j.total)) return out;
+    }
+  }
+  // URIs currently in a playlist (the 2026 API returns the song under "item"; older responses used "track").
+  async function playlistContents(id) {
+    const items = await pagedItems(`/playlists/${id}/items`, 100);
+    return items.map(it => (it.item && typeof it.item === "object" ? it.item : typeof it.track === "object" ? it.track : null)?.uri).filter(Boolean);
+  }
+  async function findOurPlaylist(name) {
+    const mine = await pagedItems("/me/playlists", 50);
+    return mine.find(pl => pl && pl.name === name && (pl.description || "").includes(DESCRIPTION)) || null;
+  }
+  async function sendPlaylist(p, pidOf) {
+    const key = playlistKey(p), want = playlistUris(p, pidOf);
+    let rec = sent.playlists[key], have = [];
+    if (rec) {
+      try { have = await playlistContents(rec.id); }
+      catch (e) { if (e.status === 404) { rec = null; delete sent.playlists[key]; } else throw e; }  // deleted in Spotify: make it again
+    }
+    if (!rec) {
+      // A playlist we made earlier whose creation wasn't confirmed: reuse it rather than make a duplicate.
+      const found = await findOurPlaylist(p.name);
+      const made = found || await api("/me/playlists", { method: "POST", body: { name: p.name, public: false, description: DESCRIPTION } });
+      rec = sent.playlists[key] = { id: made.id, url: made.external_urls?.spotify || "" };
+      await saveSent();
+      if (found) have = await playlistContents(found.id);
+    }
+    // Add only what isn't there yet (counting repeats), keeping the Apple playlist's order.
+    const left = new Map(); for (const u of have) left.set(u, (left.get(u) || 0) + 1);
+    const todo = want.filter(u => { const n = left.get(u) || 0; if (n) { left.set(u, n - 1); return false; } return true; });
+    for (let i = 0; i < todo.length; i += 100) {
+      await api(`/playlists/${rec.id}/items`, { method: "POST", body: { uris: todo.slice(i, i + 100) } });
+      $("sendStatus").textContent = `${p.name}: ${Math.min(i + 100, todo.length)} of ${todo.length}`;
+    }
+    const missing = p.ids.length - want.length;
+    log(`${p.name}: ${todo.length ? `${todo.length} song${todo.length === 1 ? "" : "s"} added` : "already up to date"}${missing ? `, ${missing} without a match left out` : ""}.`, rec.url);
+  }
   async function send() {
     const btn = $("sendBtn"); btn.disabled = true;
     $("log").textContent = "";
-    const pidOf = byPid();
     try {
-      if ($("sendLiked").checked) {
-        const uris = likedUris();
-        let batch = 40; const startedAt = sent.liked;
-        if (sent.liked >= uris.length && uris.length) log(`Liked Songs: already sent (${uris.length.toLocaleString()} songs).`);
-        while (sent.liked < uris.length) {
-          const chunk = uris.slice(sent.liked, sent.liked + batch);
-          try { await saveToLibrary(chunk); }
-          catch (e) { if (!e.fatal && e.status === 400 && batch > 1) { batch = Math.max(1, Math.floor(batch / 2)); continue; } throw e; }
-          sent.liked += chunk.length; await store.set("spotify:sent", sent);
-          $("sendStatus").textContent = `Liked Songs: ${sent.liked.toLocaleString()} of ${uris.length.toLocaleString()}`;
-        }
-        if (sent.liked > startedAt) log(`Liked Songs: ${(sent.liked - startedAt).toLocaleString()} songs added.`);
-      }
+      if ($("sendLiked").checked) await sendLiked();
+      const pidOf = byPid();
       const chosen = [...document.querySelectorAll("#plList input:checked")].map(i => library.playlists[Number(i.value)]);
-      for (const p of chosen) {
-        const key = playlistKey(p), uris = playlistUris(p, pidOf);
-        let rec = sent.playlists[key];
-        if (rec && rec.added >= uris.length) { log(`${p.name}: already sent.`, rec.url); continue; }
-        if (!rec) {
-          const made = await api("/me/playlists", { method: "POST", body: { name: p.name, public: false, description: "Copied from Apple Music with Crate" } });
-          rec = sent.playlists[key] = { id: made.id, url: made.external_urls?.spotify || "", added: 0 };
-          await store.set("spotify:sent", sent);
-        }
-        while (rec.added < uris.length) {
-          const chunk = uris.slice(rec.added, rec.added + 100);
-          await api(`/playlists/${rec.id}/items`, { method: "POST", body: { uris: chunk } });
-          rec.added += chunk.length; await store.set("spotify:sent", sent);
-          $("sendStatus").textContent = `${p.name}: ${rec.added} of ${uris.length}`;
-        }
-        const missing = p.ids.length - uris.length;
-        log(`${p.name}: ${uris.length} songs${missing ? `, ${missing} without a match left out` : ""}.`, rec.url);
-      }
+      for (const p of chosen) await sendPlaylist(p, pidOf);
       $("sendStatus").textContent = "Done. Open Spotify to see them (it can take a minute to show up).";
     } catch (e) {
-      showError(e.message); $("sendStatus").textContent = "Stopped. Press Send again to continue where it left off.";
+      showError(e.message); $("sendStatus").textContent = "Stopped. Press Send again to continue; anything already sent is skipped.";
     }
     btn.disabled = false; renderSendCounts();
   }
@@ -487,20 +543,22 @@ input[type="text"], input[type="search"], select { font: inherit; font-size: 14p
   function renderMatchButtons() {
     if (!library) return;
     const c = counts();
-    $("matchBtn").disabled = !auth || (!running && !c.pending);
-    $("matchBtn").textContent = running ? "Pause" : c.pending === library.tracks.length ? "Start matching" : c.pending ? "Continue matching" : "All songs checked";
-    $("retryBtn").hidden = running || !auth || c.pending > 0 || !library.tracks.some(t => matches[t.pid]?.error);
+    $("matchBtn").disabled = !auth || stopping || (!running && !c.pending);
+    $("matchBtn").textContent = stopping ? "Stopping…" : running ? "Pause" : c.pending === library.tracks.length ? "Start matching" : c.pending ? "Continue matching" : "All songs checked";
+    $("retryBtn").hidden = running || stopping || !auth || c.pending > 0 || !c.none;
     $("sendBtn").disabled = !auth || running || !likedUris().length;
   }
   function renderSendCounts() {
     if (!library) return;
     const uris = likedUris();
-    $("likedCount").textContent = `${uris.length.toLocaleString()} songs` + (sent.liked && sent.liked < uris.length ? `, ${sent.liked.toLocaleString()} already sent` : sent.liked >= uris.length && uris.length ? ", all sent" : "");
+    const saved = savedSet(), rejected = rejectedSet();
+    const already = uris.filter(u => saved.has(u)).length, refused = uris.filter(u => rejected.has(u)).length;
+    $("likedCount").textContent = `${uris.length.toLocaleString()} songs` + (already ? (already + refused >= uris.length ? ", all sent" : `, ${already.toLocaleString()} already sent`) : "") + (refused ? `, ${refused} refused by Spotify` : "");
     const pidOf = byPid();
     document.querySelectorAll("#plList label").forEach(l => {
       const p = library.playlists[Number(l.querySelector("input").value)];
       const n = playlistUris(p, pidOf).length, done = sent.playlists[playlistKey(p)];
-      l.querySelector("small").textContent = `${n} of ${p.ids.length} matched${done ? (done.added >= n ? " · sent" : ` · ${done.added} sent`) : ""}`;
+      l.querySelector("small").textContent = `${n} of ${p.ids.length} matched${done ? " · in Spotify" : ""}`;
     });
     renderMatchButtons();
   }
@@ -523,7 +581,7 @@ input[type="text"], input[type="search"], select { font: inherit; font-size: 14p
   $("connectBtn").addEventListener("click", connect);
   $("disconnectBtn").addEventListener("click", disconnect);
   $("matchBtn").addEventListener("click", () => runMatching(false));
-  $("retryBtn").addEventListener("click", () => { for (const t of library.tracks) if (matches[t.pid]?.error) delete matches[t.pid]; runMatching(false); });
+  $("retryBtn").addEventListener("click", () => runMatching(true));
   document.querySelectorAll(".chip").forEach(b => b.addEventListener("click", () => {
     filter = b.dataset.filter; shownCount = 100;
     document.querySelectorAll(".chip").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
@@ -545,7 +603,12 @@ input[type="text"], input[type="search"], select { font: inherit; font-size: 14p
     }
     library = { tracks: saved.tracks, playlists: saved.playlists || [] };
     matches = (await store.get("spotify:matches")) || {};
-    sent = (await store.get("spotify:sent")) || { liked: 0, playlists: {} };
+    sent = (await store.get("spotify:sent")) || {};
+    sent.playlists = sent.playlists || {}; sent.rejected = sent.rejected || [];
+    likedOrder = library.tracks.slice().sort((a, b) => (a.added || "").localeCompare(b.added || ""));
+    if (!sent.likedUris) {  // older format counted positions; treat that many from the front as sent, once
+      sent.likedUris = likedUris().slice(0, sent.liked || 0); delete sent.liked;
+    }
     const when = saved.loadedAt ? new Date(saved.loadedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
     const old = !library.tracks.some(t => "added" in t);
     $("libBanner").textContent = `Using ${saved.fileName || "your library"}${when ? ` from ${when}` : ""}: ${library.tracks.length.toLocaleString()} songs, ${library.playlists.length} playlists.`
