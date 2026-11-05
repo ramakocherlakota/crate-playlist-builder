@@ -251,7 +251,16 @@ input[type="text"], input[type="search"], select { font: inherit; font-size: 14p
       if (!r.ok) {
         let msg = ""; try { msg = (await r.json()).error?.message || ""; } catch (e) {}
         const err = new Error(msg || `Spotify answered ${r.status}`); err.status = r.status;
-        if (r.status === 403) { err.fatal = true; err.message = "Spotify refused access (403). Check that your account has Premium and is listed under User Management in your Spotify developer app." + (msg ? ` Spotify said: ${msg}` : ""); }
+        if (r.status === 403) {
+          err.fatal = true;
+          // Development-mode apps refuse accounts that aren't allowlisted, and everything if the owner lacks Premium.
+          err.message = /premium/i.test(msg)
+            ? "Spotify says Premium is required (403). The account that owns the Crate developer app needs active Premium; if you just started it, Spotify can take a few hours to notice. Then press Disconnect and Connect Spotify again."
+            : /regist|allowlist|whitelist/i.test(msg)
+            ? "Spotify says this account isn't allowed to use the app (403). In the Spotify developer dashboard, open the Crate app → User Management and add the name and email of the account you sign in with here. Then press Disconnect and Connect Spotify again."
+            : "Spotify refused access (403). Check that the Crate developer app's owner has Premium and that the account you sign in with is listed under User Management in the dashboard. Then press Disconnect and Connect Spotify again.";
+          if (msg) err.message += ` (Spotify said: “${msg}”)`;
+        }
         throw err;
       }
       return r.status === 204 ? null : r.json().catch(() => null);
