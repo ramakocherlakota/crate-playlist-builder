@@ -169,7 +169,13 @@ input[type="text"], input[type="search"], select { font: inherit; font-size: 14p
   const SCOPES = "user-read-private user-library-read user-library-modify playlist-read-private playlist-modify-private playlist-modify-public";
   const API = "https://api.spotify.com/v1";
   const $ = id => document.getElementById(id);
-  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  // A sleep that a Pause can cut short.
+  const aborted = () => Object.assign(new Error("Paused"), { aborted: true });
+  const sleep = (ms, signal) => new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(aborted());
+    const t = setTimeout(resolve, ms);
+    signal?.addEventListener("abort", () => { clearTimeout(t); reject(aborted()); }, { once: true });
+  });
 
   // ---------- storage (same IndexedDB as Crate, plus localStorage for the sign-in) ----------
   const store = (() => {
@@ -244,19 +250,19 @@ input[type="text"], input[type="search"], select { font: inherit; font-size: 14p
   const clock = t => new Date(t).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   // Requests that create something (POST) are not repeated after a lost response or server error,
   // since Spotify may already have done the work; the caller reconciles instead.
-  async function api(path, { method = "GET", body, query } = {}) {
+  async function api(path, { method = "GET", body, query, signal } = {}) {
     const url = API + path + (query ? "?" + new URLSearchParams(query) : "");
     const repeatable = method !== "POST";
     const unsure = () => Object.assign(new Error("Spotify didn't confirm the last change. Press Send again; it checks what's already there before adding more."), { unsure: true });
     for (let attempt = 0; attempt < 8; ) {
       // Reserve the next free slot so concurrent callers queue up behind each other.
       const start = Math.max(Date.now(), pauseUntil, nextSlot); nextSlot = start + gap;
-      if (start > Date.now()) await sleep(start - Date.now());
+      if (start > Date.now()) await sleep(start - Date.now(), signal);
       if (pauseUntil > Date.now()) continue;  // a 429 arrived while we waited
       const token = await accessToken();
       let r;
-      try { r = await fetch(url, { method, headers: { Authorization: "Bearer " + token, ...(body ? { "Content-Type": "application/json" } : {}) }, body: body ? JSON.stringify(body) : undefined }); }
-      catch (e) { if (!repeatable) throw unsure(); attempt++; await sleep(1500 * attempt); continue; }  // network blip
+      try { r = await fetch(url, { method, signal, headers: { Authorization: "Bearer " + token, ...(body ? { "Content-Type": "application/json" } : {}) }, body: body ? JSON.stringify(body) : undefined }); }
+      catch (e) { if (signal?.aborted) throw aborted(); if (!repeatable) throw unsure(); attempt++; await sleep(1500 * attempt, signal); continue; }  // network blip
       if (r.status === 429) {
         slowDowns++;
         const told = Number(r.headers.get("Retry-After"));
@@ -271,7 +277,7 @@ input[type="text"], input[type="search"], select { font: inherit; font-size: 14p
       }
       slowDowns = 0; gap = Math.max(MIN_GAP, gap * 0.97);
       if (r.status === 401 && attempt === 0 && auth) { attempt++; auth.expiresAt = 0; continue; }
-      if (r.status >= 500) { if (!repeatable) throw unsure(); attempt++; await sleep(1500 * attempt); continue; }
+      if (r.status >= 500) { if (!repeatable) throw unsure(); attempt++; await sleep(1500 * attempt, signal); continue; }
       if (!r.ok) {
         let msg = ""; try { msg = (await r.json()).error?.message || ""; } catch (e) {}
         const err = new Error(msg || `Spotify answered ${r.status}`); err.status = r.status;
@@ -318,18 +324,18 @@ input[type="text"], input[type="search"], select { font: inherit; font-size: 14p
       : (nameScore >= 2 && artistOk) || (nameScore === 3 && dur <= 3000) ? "close" : "none";
     return { score, lvl };
   }
-  async function search(q) {
-    const j = await api("/search", { query: { q, type: "track", limit: "10", market: "from_token" } });
+  async function search(q, signal) {
+    const j = await api("/search", { query: { q, type: "track", limit: "10", market: "from_token" }, signal });
     return (j?.tracks?.items || []).filter(Boolean).map(summarize);
   }
-  async function matchTrack(t) {
+  async function matchTrack(t, signal) {
     const name = forQuery(t.name), artist = primaryArtist(t.artist || t.albumArtist);
     if (!name) return { status: "none", cands: [] };
-    let cands = await search(artist ? `track:"${name}" artist:"${artist}"` : `track:"${name}"`);
+    let cands = await search(artist ? `track:"${name}" artist:"${artist}"` : `track:"${name}"`, signal);
     const rank = list => list.map(c => ({ c, ...level(t, c) })).sort((x, y) => y.score - x.score);
     let ranked = rank(cands);
     if (!ranked.length || ranked[0].lvl !== "exact") {
-      const more = await search(`${name} ${artist}`.trim());
+      const more = await search(`${name} ${artist}`.trim(), signal);
       const seen = new Set(cands.map(c => c.uri));
       cands = cands.concat(more.filter(c => !seen.has(c.uri)));
       ranked = rank(cands);
@@ -338,7 +344,7 @@ input[type="text"], input[type="search"], select { font: inherit; font-size: 14p
     return { status: best && best.lvl !== "none" ? best.lvl : "none", uri: best && best.lvl !== "none" ? best.c.uri : "", cands: ranked.slice(0, 5).map(r => r.c) };
   }
 
-  let running = false, stopping = false, saveTimer;
+  let running = false, stopping = false, saveTimer, matchAbort = null;
   // Save at most every couple of seconds while matching runs (a resetting debounce would never fire mid-run).
   const saveMatches = () => { if (!saveTimer) saveTimer = setTimeout(() => { saveTimer = null; store.set("spotify:matches", matches); }, 2000); };
   const saveMatchesNow = () => { clearTimeout(saveTimer); saveTimer = null; return store.set("spotify:matches", matches); };
@@ -347,23 +353,28 @@ input[type="text"], input[type="search"], select { font: inherit; font-size: 14p
   async function runMatching(onlyNone) {
     if (stopping) return;
     // Pausing lets the in-flight lookups finish; the button stays disabled until they have.
-    if (running) { running = false; stopping = true; renderMatchButtons(); return; }
+    if (running) { running = false; stopping = true; matchAbort?.abort(); renderMatchButtons(); return; }
     const queue = library.tracks.filter(t => { const m = matches[t.pid]; return onlyNone ? m && m.status === "none" && !m.chosen && !m.skip : !m; });
     if (!queue.length) return;
-    running = true; renderMatchButtons();
+    running = true; matchAbort = new AbortController(); renderMatchButtons();
     let i = 0, fatal = null;
     const worker = async () => {
       while (running && i < queue.length && !fatal) {
         const t = queue[i++];
-        try { matches[t.pid] = await matchTrack(t); }
-        catch (e) { if (e.fatal) { fatal = e; break; } matches[t.pid] = { status: "none", cands: [], error: true }; }
+        try { matches[t.pid] = await matchTrack(t, matchAbort.signal); }
+        catch (e) {
+          if (e.aborted) break;  // paused mid-lookup: this song stays unchecked and is retried on Continue
+          if (e.fatal) { fatal = e; break; }
+          matches[t.pid] = { status: "none", cands: [], error: true };
+        }
         saveMatches();  // the 1-second interval redraws the counts
       }
     };
     await worker();  // one lookup at a time; api() paces requests
     running = false; stopping = false; await saveMatchesNow(); renderAll();
     if (fatal) showError(fatal.message);
-    $("matchStatus").textContent = fatal ? "" : i < queue.length ? "Paused." : "Done.";
+    const left = counts().pending;
+    $("matchStatus").textContent = fatal ? "" : left ? `Paused. ${left.toLocaleString()} songs still to check; press Continue matching to carry on.` : "Done.";
   }
 
   // ---------- review ----------
