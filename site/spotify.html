@@ -246,7 +246,7 @@ input[type="text"], input[type="search"], select { font: inherit; font-size: 14p
   // (using Spotify's Retry-After when the browser can read it, otherwise 5s, 10s, 20s… up to 10 minutes);
   // successes shrink the gap again slowly. A wait longer than MAX_WAIT stops cleanly so progress isn't lost.
   const MIN_GAP = 300, MAX_GAP = 5000, MAX_WAIT = 15 * 60 * 1000;
-  let pauseUntil = 0, nextSlot = 0, gap = MIN_GAP, slowDowns = 0;
+  let pauseUntil = 0, nextSlot = 0, gap = MIN_GAP, slowDowns = 0, lastThrottle = null;
   const clock = t => new Date(t).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   // Requests that create something (POST) are not repeated after a lost response or server error,
   // since Spotify may already have done the work; the caller reconciles instead.
@@ -265,12 +265,20 @@ input[type="text"], input[type="search"], select { font: inherit; font-size: 14p
       catch (e) { if (signal?.aborted) throw aborted(); if (!repeatable) throw unsure(); attempt++; await sleep(1500 * attempt, signal); continue; }  // network blip
       if (r.status === 429) {
         slowDowns++;
+        // Spotify says why in the body: a spent development-mode quota (QUOTA_EXCEEDED) won't clear by
+        // retrying in a few minutes, unlike the ordinary 30-second rate limit.
+        let why = "";
+        try { const j = await r.json(); why = [j?.error?.reason, j?.error?.message].filter(Boolean).join(": "); } catch (e) {}
         const told = Number(r.headers.get("Retry-After"));
+        lastThrottle = { why, told: told > 0 ? told : null, at: Date.now() };
+        if (/quota/i.test(why)) {
+          throw Object.assign(new Error(`Spotify says the Crate app's development-mode quota is used up, so it's refusing all requests for now${told > 0 ? `; it suggests trying again around ${clock(Date.now() + told * 1000)}` : ""}. This isn't fixed by retrying sooner. Your progress is saved. (Spotify said: “${why}”)`), { fatal: true });
+        }
         const wait = told > 0 ? told * 1000 + 500 : Math.min(5000 * 2 ** (slowDowns - 1), 10 * 60 * 1000);
         gap = Math.min(MAX_GAP, gap * 2);
         if (wait > MAX_WAIT) {
           pauseUntil = Date.now() + wait;
-          throw Object.assign(new Error(`Spotify asked Crate to pause until about ${clock(pauseUntil)}. Your progress is saved; come back after that and press Continue.`), { fatal: true });
+          throw Object.assign(new Error(`Spotify asked Crate to pause until about ${clock(pauseUntil)}. Your progress is saved; come back after that and press Continue.${why ? ` (Spotify said: “${why}”)` : ""}`), { fatal: true });
         }
         pauseUntil = Math.max(pauseUntil, Date.now() + wait);
         continue;  // 429s don't use up attempts
@@ -585,7 +593,7 @@ input[type="text"], input[type="search"], select { font: inherit; font-size: 14p
     $("barFill").style.width = `${library.tracks.length ? 100 * (library.tracks.length - c.pending) / library.tracks.length : 0}%`;
     for (const k of ["close", "none", "skipped", "exact"]) document.querySelector(`[data-count="${k}"]`).textContent = c[k].toLocaleString();
     if (running) $("matchStatus").textContent = pauseUntil > Date.now()
-      ? `Spotify asked us to slow down; resuming around ${clock(pauseUntil)}…`
+      ? `Spotify asked us to slow down${lastThrottle?.told ? ` for ${lastThrottle.told}s` : " (without saying for how long)"}${lastThrottle?.why ? ` (“${lastThrottle.why}”)` : ""}; trying again around ${clock(pauseUntil)}…`
       : `Checking… ${c.pending.toLocaleString()} to go`;
   }
   function renderMatchButtons() {
