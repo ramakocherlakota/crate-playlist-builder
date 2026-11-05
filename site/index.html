@@ -1035,24 +1035,38 @@ display dialog "Done." & return & return & reportText buttons {"OK"} default but
     const idOf = new Map(library.tracks.map(t => [t.pid, t.id]));
     let missing = 0;
     const toIds = pids => new Set(pids.map(p => idOf.get(p) || (missing++, null)).filter(Boolean));
+    const pidOfId = new Map(library.tracks.map(t => [t.id, t.pid]));
+    let outside = 0;  // songs added or removed elsewhere (Spotify app, Music, another device) and picked up
     drafts = saved.drafts.map(d => {
-      const ids = toIds(d.pids);
-      let orig = null;
+      let ids = null, orig = null;
       let origName = d.origName, origPid = d.origPid || "", origAt = d.origAt || 0;
       if (origName != null) {
-        // A library exported after this draft's starting point is the newer truth (e.g. after running a script);
+        // A library loaded after this draft's starting point is the newer truth (e.g. after running a script);
         // otherwise keep the saved starting point, which "Mark as applied" may have moved forward.
         const pl = library.playlists.find(p => !p.smart && ((origPid && p.pid === origPid) || p.name === origName));
-        if (pl && (library.loadedAt || 0) >= origAt) { orig = new Set(pl.ids); origName = pl.name; origPid = pl.pid || origPid; origAt = library.loadedAt || 0; }
+        if (pl && (library.loadedAt || 0) >= origAt) {
+          const newOrig = pl.ids.map(id => pidOfId.get(id)).filter(Boolean);
+          if (d.origPids) {
+            // Three-way merge: keep only *your* edits (relative to the old starting point) and lay them over the
+            // playlist as it is now, so songs changed elsewhere aren't mistaken for your own additions or removals.
+            const before = new Set(d.origPids), mine = new Set(d.pids), now = new Set(newOrig);
+            const myAdds = d.pids.filter(p => !before.has(p)), myRemoves = new Set(d.origPids.filter(p => !mine.has(p)));
+            outside += newOrig.filter(p => !before.has(p)).length + d.origPids.filter(p => !now.has(p)).length;
+            ids = toIds(newOrig.filter(p => !myRemoves.has(p)).concat(myAdds));
+          }
+          orig = new Set(pl.ids); origName = pl.name; origPid = pl.pid || origPid; origAt = library.loadedAt || 0;
+        }
         else orig = new Set((d.origPids || []).map(p => idOf.get(p)).filter(Boolean));
       }
-      return { name: d.name, ids, orig, origName, origPid, origAt };
+      return { name: d.name, ids: ids || toIds(d.pids), orig, origName, origPid, origAt };
     });
     active = Math.min(Math.max(0, saved.active || 0), drafts.length - 1);
     selected = drafts[active].ids; $("plName").value = drafts[active].name;
     render();
     const n = drafts.length;
-    status(`Restored ${n} playlist${n === 1 ? "" : "s"} you were editing.` + (missing ? ` ${missing} song${missing === 1 ? " isn't" : "s aren't"} in this library file and ${missing === 1 ? "was" : "were"} left out.` : ""));
+    status(`Restored ${n} playlist${n === 1 ? "" : "s"} you were editing.`
+      + (outside ? ` Picked up ${outside} song change${outside === 1 ? "" : "s"} made outside Crate; your own edits are kept on top.` : "")
+      + (missing ? ` ${missing} song${missing === 1 ? " isn't" : "s aren't"} in this library file and ${missing === 1 ? "was" : "were"} left out.` : ""));
     return n;
   }
 
