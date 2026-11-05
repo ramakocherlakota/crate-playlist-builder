@@ -224,7 +224,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
       <li><strong>iPhone:</strong> edit playlists as usual. Check <strong>Show changes</strong>, then tap <strong>Share script</strong> → AirDrop → your Mac.</li>
       <li><strong>iPhone:</strong> tap <strong>Mark as applied</strong>, so the next script from the phone only carries newer edits.</li>
       <li><strong>Mac:</strong> double-click the script in Downloads to open it in Script Editor, then press Run.</li>
-      <li><strong>Afterwards:</strong> re-export to the same iCloud Drive file and load it on each device; if asked, choose <strong>Start fresh from this file</strong> for changes you've already run.</li>
+      <li><strong>Afterwards:</strong> re-export to the same iCloud Drive file and load it on each device. Changes you've already run show as done, and edits you haven't run yet are kept.</li>
     </ol>
     <p>Scripts only add and remove the songs you changed, so edits made on the Mac and the iPhone can be run in any order. If both devices change the same song in opposite ways, the script run last wins.</p>
   </section>
@@ -234,10 +234,6 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
   <div class="banner" id="banner">
     <span id="bannerText"><strong>Sample library.</strong> These songs are examples to show how it works. Load your exported library (.xml) to see your music.</span>
     <button type="button" id="forgetBtn" hidden>Forget this library</button>
-  </div>
-  <div class="banner choice" id="keepChoice" hidden role="alert">
-    <span id="keepText"></span>
-    <span class="btns"><button type="button" id="keepBtn">Keep my changes</button><button type="button" class="primary" id="freshBtn">Start fresh from this file</button></span>
   </div>
 
   <div class="main">
@@ -322,7 +318,6 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
   try { localStorage.setItem(SOURCE_KEY, source); } catch (e) {}
   document.body.dataset.source = source;
   const K = key => source === "spotify" ? "spotify:" + key : key;  // storage key for this source
-  const IN_SOURCE = source === "spotify" ? "in Spotify" : "in this file";
   document.querySelectorAll(".source button").forEach(b => {
     b.setAttribute("aria-pressed", String(b.dataset.source === source));
     b.addEventListener("click", () => {
@@ -1132,27 +1127,10 @@ display dialog "Done." & return & return & reportText buttons {"OK"} default but
     status("");
     libraryName = fileName;
     if (!opts.restored) saveLibrary();
-    $("keepChoice").hidden = true;
-    restoreDrafts().finally(() => {
-      saving = true; scheduleSave();
-      // A freshly loaded file that disagrees with saved edits: let the viewer decide rather than guess.
-      const pending = drafts.filter(changed);
-      if (!opts.restored && pending.length) {
-        $("keepText").textContent = `${pending.length === 1 ? "1 playlist you were editing has" : `${pending.length} playlists you were editing have`} changes that aren't ${IN_SOURCE} (${pending.map(d => d.name.trim() || "Untitled").join(", ")}). Keep them, or reset to what's in the file?`;
-        $("keepChoice").hidden = false;
-      }
-    });
+    // Saved edits are merged onto the newly loaded playlists (see restoreDrafts), so only your own
+    // unapplied edits remain pending and there's nothing to ask about.
+    restoreDrafts().finally(() => { saving = true; scheduleSave(); });
   }
-  $("keepBtn").addEventListener("click", () => { $("keepChoice").hidden = true; status("Kept your changes."); });
-  $("freshBtn").addEventListener("click", () => {
-    $("keepChoice").hidden = true;
-    // Existing playlists go back to the file's contents; new playlists that never reached Music are dropped.
-    checkpoint("start fresh");
-    drafts = drafts.filter(d => d.orig).map(d => ({ ...d, ids: new Set(d.orig), name: d.origName }));
-    if (!drafts.length) drafts = [{ name: "My Picks", ids: new Set(), orig: null, origName: null }];
-    switchDraft(0);
-    status("Reset every playlist to match this file.");
-  });
   $("forgetBtn").addEventListener("click", async () => {
     if (!$("forgetBtn").dataset.confirm) {
       $("forgetBtn").dataset.confirm = "1"; $("forgetBtn").textContent = "Forget library and all edits?";
@@ -1267,7 +1245,6 @@ display dialog "Done." & return & return & reportText buttons {"OK"} default but
       if (saved && saved.tracks && library.sample) loadLibrary({ tracks: saved.tracks, playlists: saved.playlists || [], loadedAt: saved.loadedAt, sample: false }, saved.fileName, { restored: true });
     });
   } else {
-    $("freshBtn").textContent = "Start fresh from Spotify";
     $("dropHint").textContent = "Library files are for Apple Music";
     $("bannerText").innerHTML = "<strong>Sample songs.</strong> Press <strong>Connect Spotify</strong> to load your Liked Songs, saved albums and playlists.";
     renderLoadBtn();
