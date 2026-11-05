@@ -198,8 +198,28 @@
       await api(`/playlists/${id}`, { method: "PUT", body: { name } });
     }
     for (let i = 0; i < removeUris.length; i += 100) { progress(`${name}: removing songs…`); await removeFromPlaylist(id, removeUris.slice(i, i + 100)); }
-    for (let i = 0; i < addUris.length; i += 100) { progress(`${name}: adding songs…`); await api(`/playlists/${id}/items`, { method: "POST", body: { uris: addUris.slice(i, i + 100) } }); }
+    let addReply = null;
+    for (let i = 0; i < addUris.length; i += 100) { progress(`${name}: adding songs…`); addReply = await api(`/playlists/${id}/items`, { method: "POST", body: { uris: addUris.slice(i, i + 100) } }); }
+    if (addUris.length || removeUris.length) await verifyPlaylist(id, name, addUris, removeUris, addReply, progress);
     return { id, url };
+  }
+  // Reads the playlist back and confirms Spotify really made the changes (a 2xx alone has proved not to be enough).
+  async function verifyPlaylist(id, name, addUris, removeUris, addReply, progress) {
+    let entries = [], have = new Set();
+    for (let tries = 0; tries < 2; tries++) {
+      if (tries) { progress(`${name}: waiting for Spotify to catch up…`); await sleep(3000); }
+      progress(`${name}: checking the result…`);
+      entries = await allPages(`/playlists/${id}/items`, { limit: "100" });
+      have = new Set(entries.map(e => entryTrack(e)?.uri).filter(Boolean));
+      if (addUris.every(u => have.has(u)) && removeUris.every(u => !have.has(u))) return;
+    }
+    const notAdded = addUris.filter(u => !have.has(u)), notRemoved = removeUris.filter(u => have.has(u));
+    const parts = [];
+    if (notAdded.length) parts.push(`${notAdded.length} of ${addUris.length} added songs aren't there`);
+    if (notRemoved.length) parts.push(`${notRemoved.length} of ${removeUris.length} removed songs are still there`);
+    // Details for diagnosis: what Spotify answered, and what a playlist entry looks like when read back.
+    const sample = entries[0] ? Object.keys(entries[0]).join(", ") : "none";
+    throw fail(`Spotify accepted the changes to “${name}”, but reading it back, ${parts.join(" and ")}. Nothing in Crate was marked as applied, so you can try again. (Read back ${entries.length} entries, ${have.size} readable; entry fields: ${sample}; Spotify's reply to adding: ${addReply ? JSON.stringify(addReply).slice(0, 200) : "none"})`, { fatal: true });
   }
 
   window.CrateSpotify = {
