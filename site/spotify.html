@@ -165,7 +165,8 @@ input[type="text"], input[type="search"], select { font: inherit; font-size: 14p
 (function () {
   const CLIENT_ID = "7a1b81580d3842c7aa6c646b75c9a798";
   const REDIRECT_URI = location.origin + "/";
-  const SCOPES = "user-library-read user-library-modify playlist-read-private playlist-modify-private playlist-modify-public";
+  // user-read-private lets searches use market=from_token (only songs playable in your country).
+  const SCOPES = "user-read-private user-library-read user-library-modify playlist-read-private playlist-modify-private playlist-modify-public";
   const API = "https://api.spotify.com/v1";
   const $ = id => document.getElementById(id);
   const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -192,7 +193,10 @@ input[type="text"], input[type="search"], select { font: inherit; font-size: 14p
   // ---------- sign-in (authorization code with PKCE; no client secret in the page) ----------
   const b64url = bytes => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   const randomString = n => { const a = new Uint8Array(n); crypto.getRandomValues(a); return b64url(a); };
-  let auth = ls.get("crate-spotify-auth");  // {access, refresh, expiresAt}
+  let auth = ls.get("crate-spotify-auth");  // {access, refresh, expiresAt, scope}
+  // A sign-in saved before the page asked for more permissions can't do everything; ask for a fresh one.
+  const missingScopes = a => !a || !a.scope ? [] : SCOPES.split(" ").filter(x => !a.scope.split(" ").includes(x));
+  if (auth && (!auth.scope || missingScopes(auth).length)) { auth = null; ls.set("crate-spotify-auth", null); }
 
   async function connect() {
     const verifier = randomString(64), state = "sp_" + randomString(16);
@@ -205,7 +209,7 @@ input[type="text"], input[type="search"], select { font: inherit; font-size: 14p
     const r = await fetch("https://accounts.spotify.com/api/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ client_id: CLIENT_ID, ...params }) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.error_description || j.error || "Spotify sign-in failed");
-    auth = { access: j.access_token, refresh: j.refresh_token || auth?.refresh, expiresAt: Date.now() + (j.expires_in - 60) * 1000 };
+    auth = { access: j.access_token, refresh: j.refresh_token || auth?.refresh, expiresAt: Date.now() + (j.expires_in - 60) * 1000, scope: j.scope || auth?.scope || SCOPES };
     ls.set("crate-spotify-auth", auth);
   }
   async function finishSignIn() {
@@ -254,7 +258,9 @@ input[type="text"], input[type="search"], select { font: inherit; font-size: 14p
         if (r.status === 403) {
           err.fatal = true;
           // Development-mode apps refuse accounts that aren't allowlisted, and everything if the owner lacks Premium.
-          err.message = /premium/i.test(msg)
+          err.message = /scope/i.test(msg)
+            ? "Spotify says the sign-in is missing a permission this needs (403). Press Disconnect, then Connect Spotify and approve again."
+            : /premium/i.test(msg)
             ? "Spotify says Premium is required (403). The account that owns the Crate developer app needs active Premium; if you just started it, Spotify can take a few hours to notice. Then press Disconnect and Connect Spotify again."
             : /regist|allowlist|whitelist/i.test(msg)
             ? "Spotify says this account isn't allowed to use the app (403). In the Spotify developer dashboard, open the Crate app → User Management and add the name and email of the account you sign in with here. Then press Disconnect and Connect Spotify again."
