@@ -15,6 +15,8 @@ Live at **https://crate.ramakocherlakota.net**
 
 With **Afterwards, save an updated Library.xml to iCloud Drive › Crate** ticked (the default), each script finishes by writing the library (songs and playlists) to `iCloud Drive/Crate/Library.xml` in the same format as Music's own export, since Music has no scriptable Export Library. Load that file in Crate on the phone: what the script applied shows as done, and edits not yet run stay pending.
 
+The playlists themselves reach the phone's Music app through **Sync Library** (Apple Music or iTunes Match) automatically, or, without a subscription, by syncing the iPhone with the Mac in Finder (by cable, or over Wi-Fi once **Show this iPhone when on Wi-Fi** is ticked).
+
 ### Changes, not rewrites
 
 The script applies only what you changed: unticked songs are removed, newly ticked songs are added at the end (existing order is kept), and a renamed playlist is renamed in Music. Anything already done is skipped, so scripts made on different devices can be run in any order, and running one twice is harmless. **Undo** (or ⌘Z) reverses the last change: ticks, renames, closing a playlist or Mark as applied. Loading a newer library (or refreshing from Spotify) keeps your unapplied edits on top of any changes made elsewhere. **Show changes** lists exactly which songs each playlist will gain or lose (with a per-song Undo). After exporting a script, **Mark as applied** resets the change counts so the next script only carries newer edits.
