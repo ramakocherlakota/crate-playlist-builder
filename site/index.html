@@ -225,7 +225,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
       <li><strong>iPhone:</strong> edit playlists as usual. Check <strong>Show changes</strong>, then tap <strong>Share script</strong> → AirDrop → your Mac.</li>
       <li><strong>iPhone:</strong> tap <strong>Mark as applied</strong>, so the next script from the phone only carries newer edits.</li>
       <li><strong>Mac:</strong> double-click the script in Downloads to open it in Script Editor, then press Run.</li>
-      <li><strong>Afterwards:</strong> re-export to the same iCloud Drive file and load it on each device. Changes you've already run show as done, and edits you haven't run yet are kept.</li>
+      <li><strong>Afterwards:</strong> the script saves an updated <code>Library.xml</code> to iCloud Drive › Crate (if that box is ticked). Load it on each device: changes you've already run show as done, and edits you haven't run yet are kept.</li>
     </ol>
     <p>Scripts only add and remove the songs you changed, so edits made on the Mac and the iPhone can be run in any order. If both devices change the same song in opposite ways, the script run last wins.</p>
   </section>
@@ -256,6 +256,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
           <div><strong id="statTime">0:00</strong><span>Length</span></div>
         </div>
       </div>
+      <label class="check apple-only"><input type="checkbox" id="exportAfter" checked> <span>Afterwards, save an updated <code>Library.xml</code> to iCloud Drive › Crate</span></label>
       <div class="btns apple-only">
         <button class="primary" type="button" id="copyBtn">Copy script</button>
         <button type="button" id="saveBtn" hidden>Save as .txt</button>
@@ -876,14 +877,110 @@ on applyChanges(plID, findName, newName, addText, removeText)
 	return msg
 end applyChanges
 
+${$("exportAfter").checked ? EXPORT_SCRIPT : ""}
 set report to {}
 ${calls}
 set AppleScript's text item delimiters to return
 set reportText to report as text
 set AppleScript's text item delimiters to ""
-display dialog "Done." & return & return & reportText buttons {"OK"} default button 1
+set exportNote to ""${$("exportAfter").checked ? `
+try
+	set songCount to exportLibrary()
+	set exportNote to return & return & "Saved an updated Library.xml (" & songCount & " songs) to iCloud Drive › Crate. Load it in Crate on your other devices."
+on error errText
+	set exportNote to return & return & "Couldn't save Library.xml to iCloud Drive: " & errText
+end try` : ""}
+display dialog "Done." & return & return & reportText & exportNote buttons {"OK"} default button 1
 `;
   }
+  const EXPORT_SCRIPT = `
+-- ---------- Save an updated Library.xml to iCloud Drive › Crate, for loading on the phone ----------
+-- Music has no scriptable "Export Library", so this writes the same format from the library itself.
+on xmlEscape(t)
+	set t to t as text
+	if t does not contain "&" and t does not contain "<" and t does not contain ">" then return t
+	repeat with pair in {{"&", "&amp;"}, {"<", "&lt;"}, {">", "&gt;"}}
+		set AppleScript's text item delimiters to item 1 of pair
+		set parts to text items of t
+		set AppleScript's text item delimiters to item 2 of pair
+		set t to parts as text
+	end repeat
+	set AppleScript's text item delimiters to ""
+	return t
+end xmlEscape
+
+on numText(n)
+	try
+		return (round (n as real)) as text
+	on error
+		return "0"
+	end try
+end numText
+
+on msText(secs)
+	try
+		return numText(secs * 1000)
+	on error
+		return "0"
+	end try
+end msText
+
+on exportLibrary()
+	set destFolder to (POSIX path of (path to home folder)) & "Library/Mobile Documents/com~apple~CloudDocs/Crate"
+	tell application "Music"
+		with timeout of 600 seconds
+			set songIDs to persistent ID of (every track of library playlist 1 whose media kind is song)
+			set songNames to name of (every track of library playlist 1 whose media kind is song)
+			set songArtists to artist of (every track of library playlist 1 whose media kind is song)
+			set songAlbumArtists to album artist of (every track of library playlist 1 whose media kind is song)
+			set songAlbums to album of (every track of library playlist 1 whose media kind is song)
+			set songYears to year of (every track of library playlist 1 whose media kind is song)
+			set songDiscs to disc number of (every track of library playlist 1 whose media kind is song)
+			set songNumbers to track number of (every track of library playlist 1 whose media kind is song)
+			set songDurations to duration of (every track of library playlist 1 whose media kind is song)
+			set playlistData to {}
+			repeat with plRef in (every user playlist whose special kind is none)
+				set end of playlistData to {persistent ID of plRef, name of plRef, smart of plRef, persistent ID of every track of plRef}
+			end repeat
+		end timeout
+	end tell
+	set out to {"<?xml version='1.0' encoding='UTF-8'?>", "<plist version='1.0'><dict>", "<key>Tracks</key><dict>"}
+	repeat with i from 1 to count of songIDs
+		set songKey to item i of songIDs
+		set end of out to "<key>" & songKey & "</key><dict><key>Track ID</key><string>" & songKey & "</string><key>Persistent ID</key><string>" & songKey & "</string><key>Name</key><string>" & xmlEscape(item i of songNames) & "</string><key>Artist</key><string>" & xmlEscape(item i of songArtists) & "</string><key>Album Artist</key><string>" & xmlEscape(item i of songAlbumArtists) & "</string><key>Album</key><string>" & xmlEscape(item i of songAlbums) & "</string><key>Year</key><integer>" & numText(item i of songYears) & "</integer><key>Disc Number</key><integer>" & numText(item i of songDiscs) & "</integer><key>Track Number</key><integer>" & numText(item i of songNumbers) & "</integer><key>Total Time</key><integer>" & msText(item i of songDurations) & "</integer></dict>"
+	end repeat
+	set end of out to "</dict><key>Playlists</key><array>"
+	repeat with plItem in playlistData
+		set pl to contents of plItem
+		set itemParts to {}
+		repeat with trackRef in (item 4 of pl)
+			set end of itemParts to "<dict><key>Track ID</key><string>" & (contents of trackRef) & "</string></dict>"
+		end repeat
+		set AppleScript's text item delimiters to ""
+		set smartPart to ""
+		if item 3 of pl then set smartPart to "<key>Smart Info</key><true/>"
+		set end of out to "<dict><key>Name</key><string>" & xmlEscape(item 2 of pl) & "</string><key>Playlist Persistent ID</key><string>" & (item 1 of pl) & "</string>" & smartPart & "<key>Playlist Items</key><array>" & (itemParts as text) & "</array></dict>"
+	end repeat
+	set end of out to "</array></dict></plist>"
+	set AppleScript's text item delimiters to linefeed
+	set xmlText to out as text
+	set AppleScript's text item delimiters to ""
+	-- Write to a temporary file and swap it in, so the phone never picks up a half-written file.
+	do shell script "mkdir -p " & quoted form of destFolder
+	set tmpPath to destFolder & "/.Library.xml.tmp"
+	set fileRef to open for access (POSIX file tmpPath) with write permission
+	try
+		set eof fileRef to 0
+		write xmlText to fileRef as «class utf8»
+		close access fileRef
+	on error errText
+		close access fileRef
+		error errText
+	end try
+	do shell script "mv -f " & quoted form of tmpPath & " " & quoted form of (destFolder & "/Library.xml")
+	return count of songIDs
+end exportLibrary
+`;
 
   // ---------- output ----------
   // Status lines are one-off confirmations, so they clear themselves.
@@ -944,6 +1041,13 @@ display dialog "Done." & return & return & reportText buttons {"OK"} default but
     status(`Marked ${n} playlist${n === 1 ? "" : "s"} as applied. New edits will start from here.`);
   });
   $("plName").addEventListener("input", () => { checkpoint(`rename “${drafts[active].name.trim() || "Untitled"}”`, "rename:" + active); drafts[active].name = $("plName").value; refresh(); });
+
+  // Whether scripts end by saving a fresh Library.xml to iCloud Drive (remembered in this browser).
+  try { $("exportAfter").checked = localStorage.getItem("crate-playlist-builder:exportAfter") !== "off"; } catch (e) {}
+  $("exportAfter").addEventListener("change", () => {
+    try { localStorage.setItem("crate-playlist-builder:exportAfter", $("exportAfter").checked ? "on" : "off"); } catch (e) {}
+    refresh();
+  });
 
   // ---------- controls ----------
   let searchTimer;
