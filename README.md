@@ -19,6 +19,10 @@ The playlists themselves reach the phone's Music app through **Sync Library** (A
 
 The export also records each song's iCloud status. Crate marks songs iCloud won't store (duplicate, ineligible and so on) with **won't sync**, and warns in the banner, the playlist list and Show changes when a playlist contains one, because such a playlist won't reach your other devices.
 
+### Adding songs from the phone with Shortcuts
+
+For a playlist whose changes are only additions (or a new playlist), **Add with Shortcuts** runs a one-time-built shortcut, `Crate Add Songs`, on the device itself: it finds each song by title, artist and album and adds it (creating the playlist if needed), then returns to Crate with any songs it couldn't find, which stay pending. With Sync Library on, iCloud carries the change to the Mac. Shortcuts can't remove songs or rename playlists, so those still go through the Mac script (or are done by hand in Music). Setup steps are in the app under **Set up the Crate shortcut**.
+
 ### Changes, not rewrites
 
 The script applies only what you changed: unticked songs are removed, newly ticked songs are added at the end (existing order is kept), and a renamed playlist is renamed in Music. Anything already done is skipped, so scripts made on different devices can be run in any order, and running one twice is harmless. **Undo** (or ⌘Z) reverses the last change: ticks, renames, closing a playlist or Mark as applied. Loading a newer library (or refreshing from Spotify) keeps your unapplied edits on top of any changes made elsewhere. **Show changes** lists exactly which songs each playlist will gain or lose (with a per-song Undo). After exporting a script, **Mark as applied** resets the change counts so the next script only carries newer edits.
