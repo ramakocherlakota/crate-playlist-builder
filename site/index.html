@@ -147,6 +147,8 @@ aside h2 { font-family: var(--font-display); font-weight: 600; font-size: 1.2rem
 .btns button { flex: 1 1 auto; }
 /* Which service the page is curating: Apple Music (file + script) or Spotify (applied directly). */
 body[data-source="spotify"] .apple-only, body[data-source="apple"] .spotify-only { display: none !important; }
+/* The Shortcuts path is for iPhone and iPad; on a Mac the script does more (exact matching, removals, renames). */
+body:not([data-ios]) .ios-only { display: none !important; }
 .source { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .source button { border: 0; border-radius: 0; padding: 7px 12px; }
 .source button + button { border-left: 1px solid var(--line); }
@@ -273,10 +275,10 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
         <button type="button" id="shareBtn" hidden>Share script</button>
         <button type="button" id="appliedBtn" title="After you've run or sent this script, start counting changes from here">Mark as applied</button>
       </div>
-      <div class="btns apple-only">
+      <div class="btns apple-only ios-only">
         <button type="button" id="shortcutBtn" disabled>Add with Shortcuts</button>
       </div>
-      <p class="hint apple-only" id="shortcutHint"></p>
+      <p class="hint apple-only ios-only" id="shortcutHint"></p>
       <div class="btns spotify-only">
         <button class="primary" type="button" id="applyBtn" disabled>Apply to Spotify</button>
       </div>
@@ -287,7 +289,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
         <li>Allow it to control Music if macOS asks. The script only adds the songs you ticked (at the end) and removes the ones you unticked, so it's safe to run scripts from several devices, or the same one twice.</li>
         <li>On a phone: <strong>Share script</strong> → AirDrop to your Mac, then <strong>Mark as applied</strong> so the next script only has newer changes.</li>
       </ol>
-      <details class="apple-only setup" id="shortcutSetup">
+      <details class="apple-only ios-only setup" id="shortcutSetup">
         <summary>Set up the Crate shortcut (once)</summary>
         <p><strong>Add with Shortcuts</strong> adds songs to the highlighted playlist (or creates it) right on this device, without the Mac. With Sync Library on, the change reaches your other devices. It only does the additions: any removals or a rename stay pending for the Mac script, or doing by hand in Music.</p>
         <p>In the Shortcuts app, tap <strong>+</strong> and name the new shortcut exactly <code>Crate Add Songs</code>. Then add these actions in order (tap a blue field to pick a variable):</p>
@@ -355,6 +357,8 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
   if (SP.isReturningFromSignIn()) source = "spotify";
   try { localStorage.setItem(SOURCE_KEY, source); } catch (e) {}
   document.body.dataset.source = source;
+  // iPadOS reports itself as a Mac, so also check for a touch screen.
+  if (/iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)) document.body.dataset.ios = "";
   const K = key => source === "spotify" ? "spotify:" + key : key;  // storage key for this source
   document.querySelectorAll(".source button").forEach(b => {
     b.setAttribute("aria-pressed", String(b.dataset.source === source));
