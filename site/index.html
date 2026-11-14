@@ -105,6 +105,9 @@ a.button:hover { background: var(--hover); }
 .track { padding-left: 100px; font-size: 14px; }
 .track .num { width: 2.6em; text-align: right; color: var(--muted); font-family: var(--font-mono); font-size: 12px; flex: none; font-variant-numeric: tabular-nums; }
 .track.off .name { color: var(--muted); }
+.nosync { flex: none; font-size: 11.5px; padding: 1px 7px; border-radius: 999px; background: var(--warn-bg); color: var(--warn-fg); white-space: nowrap; cursor: help; }
+.draft-meta .warn, .changes .warn { color: var(--warn-fg); }
+.changes .warn { background: var(--warn-bg); padding: 4px 8px; border-radius: 6px; }
 .play { width: 26px; height: 26px; flex: none; padding: 0; display: grid; place-items: center; border-radius: 50%; color: var(--accent); background: var(--surface); }
 .play svg { display: block; }
 .play[data-state="playing"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
@@ -388,7 +391,8 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
         artist: t.Artist || "", albumArtist: t["Album Artist"] || "", album: t.Album || "",
         sortAlbumArtist: t["Sort Album Artist"] || "", sortArtist: t["Sort Artist"] || "", sortAlbum: t["Sort Album"] || "",
         year: t.Year || 0, disc: t["Disc Number"] || 1, num: t["Track Number"] || 0, ms: t["Total Time"] || 0,
-        added: t["Date Added"] || ""
+        added: t["Date Added"] || "",
+        cloud: String(t["iCloud Status"] || "").toLowerCase()
       });
     }
     const valid = new Set(tracks.map(t => t.id));
@@ -546,6 +550,13 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
   // ---------- rendering ----------
   const CARET = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
+  // iCloud won't store songs with these statuses, and a playlist containing one won't reach other devices.
+  // Only known when the library came from a Crate script's export (with Sync Library on).
+  const NO_SYNC = new Set(["duplicate", "ineligible", "error", "removed", "no longer available", "not uploaded"]);
+  const wontSync = t => !!t && NO_SYNC.has(t.cloud);
+  const noSyncIn = ids => { const out = []; for (const id of ids) { const t = trackById.get(id); if (wontSync(t)) out.push(t); } return out; };
+  const noSyncHelp = t => `iCloud status: ${t.cloud}. iCloud won't store this copy, so a playlist containing it won't sync to your other devices.${t.cloud === "duplicate" ? " Your library has another copy of this song; use that one instead." : ""}`;
+
   function makeRow(cls, label, ids, opts) {
     const row = document.createElement("div");
     row.className = "row " + cls; row.setAttribute("role", "treeitem");
@@ -564,6 +575,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
     const nm = document.createElement("span"); nm.className = "name"; nm.textContent = label; nm.title = label;
     nm.addEventListener("click", () => caret ? caret.click() : cb.click());
     row.appendChild(nm);
+    if (opts.play && wontSync(opts.play)) { const w = document.createElement("span"); w.className = "nosync"; w.textContent = "won't sync"; w.title = noSyncHelp(opts.play); row.appendChild(w); }
     let chip = null;
     if (opts.expandable) { chip = document.createElement("span"); chip.className = "chip"; row.appendChild(chip); }
     if (opts.meta) { const m = document.createElement("span"); m.className = "meta"; m.textContent = opts.meta; row.appendChild(m); }
@@ -695,6 +707,8 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
       const pick = document.createElement("button"); pick.type = "button"; pick.className = "draft-pick";
       const nm = document.createElement("span"); nm.className = "draft-name"; nm.textContent = d.name.trim() || "Untitled";
       const mt = document.createElement("span"); mt.className = "draft-meta"; mt.textContent = draftMeta(d);
+      const bad = noSyncIn(d.ids);
+      if (bad.length) { const w = document.createElement("span"); w.className = "warn"; w.textContent = ` · ⚠ ${bad.length} won't sync`; w.title = "This playlist contains songs iCloud won't store, so it won't reach your other devices until they're removed or swapped. They're marked in the list on the right."; mt.appendChild(w); }
       pick.append(nm, mt);
       pick.addEventListener("click", () => { if (i !== active) switchDraft(i); });
       const close = document.createElement("button"); close.type = "button"; close.className = "draft-close";
@@ -733,6 +747,12 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
       const h = document.createElement("h3"); h.textContent = d.name.trim() || "Untitled"; sec.appendChild(h);
       const note = !d.orig ? "New playlist" : isRenamed(d) ? `Renamed from “${d.origName}”` : "";
       if (note) { const n = document.createElement("p"); n.className = "note"; n.textContent = note; sec.appendChild(n); }
+      const bad = noSyncIn(d.ids);
+      if (bad.length) {
+        const w = document.createElement("p"); w.className = "note warn";
+        w.textContent = `⚠ This playlist won't sync to your other devices: ${bad.map(t => `“${t.name}” (${t.cloud})`).join(", ")}. Swap ${bad.length === 1 ? "it for another copy or remove it" : "them for other copies or remove them"}.`;
+        sec.appendChild(w);
+      }
       const ul = document.createElement("ul");
       const item = (id, kind) => {
         const t = trackById.get(id); if (!t) return;
@@ -939,6 +959,10 @@ on exportLibrary()
 			set songDiscs to disc number of (every track of library playlist 1 whose media kind is song)
 			set songNumbers to track number of (every track of library playlist 1 whose media kind is song)
 			set songDurations to duration of (every track of library playlist 1 whose media kind is song)
+			set songClouds to cloud status of (every track of library playlist 1 whose media kind is song)
+			repeat with i from 1 to count of songClouds
+				set item i of songClouds to (item i of songClouds) as text
+			end repeat
 			set playlistData to {}
 			repeat with plRef in (every user playlist whose special kind is none)
 				set end of playlistData to {persistent ID of plRef, name of plRef, smart of plRef, persistent ID of every track of plRef}
@@ -948,7 +972,7 @@ on exportLibrary()
 	set out to {"<?xml version='1.0' encoding='UTF-8'?>", "<plist version='1.0'><dict>", "<key>Tracks</key><dict>"}
 	repeat with i from 1 to count of songIDs
 		set songKey to item i of songIDs
-		set end of out to "<key>" & songKey & "</key><dict><key>Track ID</key><string>" & songKey & "</string><key>Persistent ID</key><string>" & songKey & "</string><key>Name</key><string>" & xmlEscape(item i of songNames) & "</string><key>Artist</key><string>" & xmlEscape(item i of songArtists) & "</string><key>Album Artist</key><string>" & xmlEscape(item i of songAlbumArtists) & "</string><key>Album</key><string>" & xmlEscape(item i of songAlbums) & "</string><key>Year</key><integer>" & numText(item i of songYears) & "</integer><key>Disc Number</key><integer>" & numText(item i of songDiscs) & "</integer><key>Track Number</key><integer>" & numText(item i of songNumbers) & "</integer><key>Total Time</key><integer>" & msText(item i of songDurations) & "</integer></dict>"
+		set end of out to "<key>" & songKey & "</key><dict><key>Track ID</key><string>" & songKey & "</string><key>Persistent ID</key><string>" & songKey & "</string><key>Name</key><string>" & xmlEscape(item i of songNames) & "</string><key>Artist</key><string>" & xmlEscape(item i of songArtists) & "</string><key>Album Artist</key><string>" & xmlEscape(item i of songAlbumArtists) & "</string><key>Album</key><string>" & xmlEscape(item i of songAlbums) & "</string><key>Year</key><integer>" & numText(item i of songYears) & "</integer><key>Disc Number</key><integer>" & numText(item i of songDiscs) & "</integer><key>Track Number</key><integer>" & numText(item i of songNumbers) & "</integer><key>Total Time</key><integer>" & msText(item i of songDurations) & "</integer><key>iCloud Status</key><string>" & xmlEscape(item i of songClouds) & "</string></dict>"
 	end repeat
 	set end of out to "</dict><key>Playlists</key><array>"
 	repeat with plItem in playlistData
@@ -1229,6 +1253,8 @@ end exportLibrary
     if (lib.sample) return;
     const when = new Date(lib.loadedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" });
     $("bannerText").textContent = `${opts.restored ? `Remembered from ${when}` : "Loaded"}: ${fileName}, ${lib.tracks.length.toLocaleString()} songs by ${artists.length.toLocaleString()} artists, ${lib.playlists.length} playlist${lib.playlists.length === 1 ? "" : "s"}.`;
+    const blocked = lib.playlists.filter(p => !p.smart && p.ids.some(id => wontSync(trackById.get(id))));
+    if (blocked.length) $("bannerText").textContent += ` ⚠ ${blocked.length === 1 ? "1 playlist has" : `${blocked.length} playlists have`} songs iCloud won't sync, so ${blocked.length === 1 ? "it won't" : "they won't"} reach your other devices: ${blocked.map(p => p.name).join(", ")}. Open ${blocked.length === 1 ? "it" : "one"} to see which songs are marked.`;
     $("banner").hidden = false;
     status("");
     libraryName = fileName;
