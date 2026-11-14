@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Step-by-step instructions for building the Crate Add Songs shortcut in the iPhone Shortcuts app.">
+<title>Crate Shortcut Setup</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#3a46c9">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a single readable column of numbered steps, grouped into parts; same palette as Crate. */
+:root {
+  --bg: #f4f5f8; --surface: #ffffff; --fg: #1a1d29; --muted: #5d6275; --line: #dfe1e9; --hover: #eceef5;
+  --accent: #3a46c9; --accent-soft: #e4e6fb; --warn-bg: #fff4d6; --warn-fg: #6b4a00;
+  --font-display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12141c; --surface: #1a1d28; --fg: #e7e9f2; --muted: #9a9fb4; --line: #2c3040; --hover: #232736;
+    --accent: #8f98ff; --accent-soft: #272c52; --warn-bg: #3a3014; --warn-fg: #f3d68a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12141c; --surface: #1a1d28; --fg: #e7e9f2; --muted: #9a9fb4; --line: #2c3040; --hover: #232736;
+  --accent: #8f98ff; --accent-soft: #272c52; --warn-bg: #3a3014; --warn-fg: #f3d68a; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 16px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 64px;
+}
+.wrap { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(1.6rem, 5vw, 2.1rem); letter-spacing: -0.02em; margin: 0; display: flex; align-items: center; gap: 12px; text-wrap: balance; }
+.logo { width: 1.2em; height: 1.2em; flex: none; }
+.back { font-size: 14px; color: var(--accent); text-decoration: none; border: 1px solid var(--line); background: var(--surface); padding: 6px 12px; border-radius: 8px; }
+.lede { margin: 0; color: var(--muted); max-width: 62ch; }
+section { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+h2 { font-family: var(--font-display); font-weight: 600; font-size: 1.2rem; margin: 0 0 4px; }
+h2 + p { margin-top: 0; }
+p { margin: 8px 0; max-width: 65ch; }
+ol.steps { margin: 10px 0 0; padding-left: 0; list-style: none; counter-reset: none; display: flex; flex-direction: column; gap: 12px; }
+ol.steps > li { display: grid; grid-template-columns: 2.2em minmax(0, 1fr); gap: 4px 10px; }
+ol.steps > li > .n { font-family: var(--font-mono); color: var(--accent); font-weight: 500; text-align: right; padding-top: 1px; }
+ol.steps > li > div > p:first-child { margin-top: 0; }
+ul { margin: 6px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+ul.tips { padding-left: 20px; }
+.act { font-weight: 600; }
+.blank { color: var(--accent); font-weight: 600; }
+code { font-family: var(--font-mono); font-size: .92em; background: var(--hover); padding: 1px 6px; border-radius: 4px; overflow-wrap: anywhere; }
+.drag { background: var(--accent-soft); color: var(--accent); border-radius: 8px; padding: 8px 12px; font-size: 15px; margin: 10px 0 0; }
+.note { background: var(--warn-bg); color: var(--warn-fg); border-radius: 8px; padding: 8px 12px; font-size: 15px; margin: 10px 0 0; }
+.check { margin-top: 10px; font-size: 15px; color: var(--muted); }
+.check strong { color: var(--fg); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><img src="icon.svg" alt="" class="logo" width="40" height="40">Crate Shortcut Setup</h1>
+    <a class="back" href="./">← Back to Crate</a>
+  </header>
+  <p class="lede">Step-by-step instructions for building the <strong>Crate Add Songs</strong> shortcut on your iPhone or iPad. You only do this once. Afterwards, Crate's <strong>Add with Shortcuts</strong> button adds songs to your playlists right on the phone, without the Mac.</p>
+
+  <section aria-labelledby="h-basics">
+    <h2 id="h-basics">How the Shortcuts editor works</h2>
+    <ul class="tips">
+      <li><strong>Adding an action:</strong> tap the <strong>Search Actions</strong> bar at the bottom of the editor, type the action's name, and tap it. New actions are added at the <strong>bottom</strong> of the shortcut.</li>
+      <li><strong>Moving an action:</strong> press and hold its title, then drag it where you want. You'll need this to put actions <em>inside</em> an If or Repeat block.</li>
+      <li><strong>Blue words</strong> in an action are blanks. Tap one to type a value or pick a variable.</li>
+      <li><strong>Picking a variable:</strong> when you tap a blank, a bar of variables appears just above the keyboard; tap the one you want. If it isn't there, tap <strong>Select Variable</strong>, then tap the earlier action whose result you want (it lights up).</li>
+      <li><strong>Why there are named variables:</strong> several actions produce a result called "Dictionary Value", which is hard to tell apart, so these steps save them under clear names with <strong>Set Variable</strong>.</li>
+    </ul>
+    <p class="note">These steps describe the Shortcuts app on iOS 18. On other versions some labels may be worded slightly differently.</p>
+  </section>
+
+  <section aria-labelledby="h-create">
+    <h2 id="h-create">Create the shortcut</h2>
+    <ol class="steps">
+      <li><span class="n">1</span><div>Open <strong>Shortcuts</strong> and tap <strong>+</strong> at the top right.</div></li>
+      <li><span class="n">2</span><div>Tap the name at the top ("New Shortcut") → <strong>Rename</strong> → type <code>Crate Add Songs</code> exactly → <strong>Done</strong>. Crate calls the shortcut by this name.</div></li>
+    </ol>
+  </section>
+
+  <section aria-labelledby="h-p1">
+    <h2 id="h-p1">Part 1: read what Crate sends</h2>
+    <ol class="steps" start="3">
+      <li><span class="n">3</span><div>Add <span class="act">Get Dictionary from Input</span>. Tap the blue <span class="blank">Input</span> → choose <strong>Shortcut Input</strong>.
+        <p class="check">A line saying "Receive <strong>Any</strong> input from <strong>Nowhere</strong>" may appear at the top. Leave it as it is.</p></div></li>
+      <li><span class="n">4</span><div>Add <span class="act">Get Dictionary Value</span>. It reads "Get <span class="blank">Value</span> for <span class="blank">Key</span> in <span class="blank">Dictionary</span>".
+        <ul><li>Tap <span class="blank">Key</span> → type <code>playlist</code>.</li><li>Leave <span class="blank">Dictionary</span> as it is.</li></ul></div></li>
+      <li><span class="n">5</span><div>Add <span class="act">Set Variable</span>. Tap <span class="blank">Variable Name</span> → type <code>Playlist Name</code>. Its input should already show <strong>Dictionary Value</strong>.</div></li>
+    </ol>
+  </section>
+
+  <section aria-labelledby="h-p2">
+    <h2 id="h-p2">Part 2: create the playlist if Crate asks</h2>
+    <ol class="steps" start="6">
+      <li><span class="n">6</span><div>Add another <span class="act">Get Dictionary Value</span>.
+        <ul><li><span class="blank">Key</span> → type <code>create</code>.</li><li>Tap <span class="blank">Dictionary</span> → <strong>Select Variable</strong> → tap the <strong>Get Dictionary from Input</strong> action (step 3).</li></ul></div></li>
+      <li><span class="n">7</span><div>Add <span class="act">If</span>. It appears together with <strong>Otherwise</strong> and <strong>End If</strong>.
+        <ul><li>The first blank should already say <strong>Dictionary Value</strong>.</li><li>Tap <span class="blank">Condition</span> → choose <strong>is</strong>.</li><li>Tap <span class="blank">Text</span> → type <code>yes</code>.</li></ul></div></li>
+      <li><span class="n">8</span><div>Add <span class="act">Create Playlist</span>.
+        <p class="drag">Drag it up so it sits between <strong>If</strong> and <strong>Otherwise</strong>.</p>
+        <ul><li>Tap its name blank (it may say <span class="blank">Playlist Name</span> or <span class="blank">Name</span>) → pick the variable <strong>Playlist Name</strong> from the bar.</li></ul></div></li>
+    </ol>
+  </section>
+
+  <section aria-labelledby="h-p3">
+    <h2 id="h-p3">Part 3: go through the songs</h2>
+    <ol class="steps" start="9">
+      <li><span class="n">9</span><div>Add another <span class="act">Get Dictionary Value</span> (it goes after <strong>End If</strong>).
+        <ul><li><span class="blank">Key</span> → type <code>songs</code>.</li><li><span class="blank">Dictionary</span> → <strong>Select Variable</strong> → tap the <strong>Get Dictionary from Input</strong> action again.</li></ul></div></li>
+      <li><span class="n">10</span><div>Add <span class="act">Repeat with Each</span>. It should say "Repeat with each item in <strong>Dictionary Value</strong>", and comes with <strong>End Repeat</strong>.</div></li>
+    </ol>
+    <p class="drag">For steps 11–16: after adding each action, <strong>drag it up inside the Repeat</strong>, above <strong>End Repeat</strong>, keeping this order.</p>
+    <ol class="steps" start="11">
+      <li><span class="n">11</span><div><span class="act">Get Dictionary Value</span>: <span class="blank">Key</span> → <code>title</code>; <span class="blank">Dictionary</span> → choose <strong>Repeat Item</strong> from the variable bar.<br>Then <span class="act">Set Variable</span> → name it <code>Title</code>.</div></li>
+      <li><span class="n">12</span><div><span class="act">Get Dictionary Value</span>: <span class="blank">Key</span> → <code>artist</code>; <span class="blank">Dictionary</span> → <strong>Repeat Item</strong>.<br>Then <span class="act">Set Variable</span> → <code>Artist</code>.</div></li>
+      <li><span class="n">13</span><div><span class="act">Get Dictionary Value</span>: <span class="blank">Key</span> → <code>album</code>; <span class="blank">Dictionary</span> → <strong>Repeat Item</strong>.<br>Then <span class="act">Set Variable</span> → <code>Album</code>.</div></li>
+      <li><span class="n">14</span><div><span class="act">Find Music</span>:
+        <ul>
+          <li>Tap <strong>Add Filter</strong> → set it to <strong>Title</strong> <strong>is</strong> → tap the value → pick the variable <strong>Title</strong>.</li>
+          <li><strong>Add Filter</strong> → <strong>Artist</strong> <strong>is</strong> → <strong>Artist</strong>.</li>
+          <li><strong>Add Filter</strong> → <strong>Album</strong> <strong>is</strong> → <strong>Album</strong>.</li>
+          <li>Turn on <strong>Limit</strong> and set it to <strong>Get 1 Song</strong>.</li>
+        </ul></div></li>
+      <li><span class="n">15</span><div><span class="act">If</span>: the first blank should be <strong>Music</strong> (Find Music's result). <span class="blank">Condition</span> → <strong>has any value</strong>.</div></li>
+      <li><span class="n">16</span><div>Fill in that If block:
+        <ul>
+          <li><strong>Between If and Otherwise:</strong> add <span class="act">Add to Playlist</span>. It reads "Add <strong>Music</strong> to <span class="blank">Playlist</span>". Tap <span class="blank">Playlist</span> → pick the variable <strong>Playlist Name</strong>.</li>
+          <li><strong>Between Otherwise and End If:</strong> add <span class="act">Get Dictionary Value</span>: <span class="blank">Key</span> → <code>index</code>; <span class="blank">Dictionary</span> → <strong>Repeat Item</strong>. Then add <span class="act">Add to Variable</span>: tap <span class="blank">Variable Name</span> → type <code>Missing</code>.</li>
+        </ul></div></li>
+    </ol>
+  </section>
+
+  <section aria-labelledby="h-p4">
+    <h2 id="h-p4">Part 4: report back to Crate</h2>
+    <p>These go <strong>after End Repeat</strong>, at the bottom.</p>
+    <ol class="steps" start="17">
+      <li><span class="n">17</span><div><span class="act">Combine Text</span>: tap its input → pick the variable <strong>Missing</strong>. Tap <span class="blank">New Lines</span> → <strong>Custom</strong> → type a comma <code>,</code></div></li>
+      <li><span class="n">18</span><div><span class="act">Text</span>: in its box, type <code>missing:</code> and then, right after the colon with no space, tap <strong>Combined Text</strong> in the variable bar.</div></li>
+      <li><span class="n">19</span><div><span class="act">Stop and Output</span>: its input should be <strong>Text</strong>. If it asks what to do when there's nowhere to output, leave it on <strong>Do Nothing</strong>.</div></li>
+    </ol>
+    <p>Tap <strong>Done</strong> to save.</p>
+  </section>
+
+  <section aria-labelledby="h-first">
+    <h2 id="h-first">First run</h2>
+    <p>In Crate on your phone, tick one song to add to a test playlist and tap <strong>Add 1 song with Shortcuts</strong>.</p>
+    <ul>
+      <li>Shortcuts may ask permission to use your music library, and later to open a web page to go back to Crate. Allow both.</li>
+      <li>Back in Crate, the message should say the song was added. Check the playlist in the Music app.</li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="h-trouble">
+    <h2 id="h-trouble">If something doesn't work</h2>
+    <ul>
+      <li><strong>The variable won't go in at step 8 or step 16:</strong> if the <span class="blank">Playlist</span> blank won't accept a variable, note what it offers instead.</li>
+      <li><strong>Songs come back "not found"</strong> even though they're in your library: try removing the <strong>Album</strong> filter in step 14.</li>
+      <li><strong>Shortcuts shows an error:</strong> note which step it highlights, if any.</li>
+    </ul>
+  </section>
+</div>
+</body>
+</html>
