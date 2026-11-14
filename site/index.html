@@ -287,7 +287,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
         <li>Allow it to control Music if macOS asks. The script only adds the songs you ticked (at the end) and removes the ones you unticked, so it's safe to run scripts from several devices, or the same one twice.</li>
         <li>On a phone: <strong>Share script</strong> → AirDrop to your Mac, then <strong>Mark as applied</strong> so the next script only has newer changes.</li>
       </ol>
-      <details class="apple-only setup">
+      <details class="apple-only setup" id="shortcutSetup">
         <summary>Set up the Crate shortcut (once)</summary>
         <p><strong>Add with Shortcuts</strong> adds songs to the highlighted playlist (or creates it) right on this device, without the Mac. With Sync Library on, the change reaches your other devices. It only does the additions: any removals or a rename stay pending for the Mac script, or doing by hand in Music.</p>
         <p>In the Shortcuts app, tap <strong>+</strong> and name the new shortcut exactly <code>Crate Add Songs</code>. Then add these actions in order (tap a blue field to pick a variable):</p>
@@ -1430,10 +1430,13 @@ end exportLibrary
     const leftover = [];
     if (plan.removes) leftover.push(`${plan.removes} removal${plan.removes === 1 ? "" : "s"}`);
     if (plan.renamed) leftover.push(`the rename to “${plan.name}”`);
-    $("shortcutHint").textContent = !plan.ok ? plan.why
+    $("shortcutHint").textContent = (!plan.ok ? (plan.why ? plan.why + " " : "")
       : `Runs the “${SHORTCUT_NAME}” shortcut${plan.create ? `, which creates “${plan.target}”` : ""}.`
-        + (leftover.length ? ` Shortcuts can only add, so ${leftover.join(" and ")} will stay pending for the Mac script or doing by hand in Music.` : "")
-        + " Set it up once below.";
+        + (leftover.length ? ` Shortcuts can only add, so ${leftover.join(" and ")} will stay pending for the Mac script or doing by hand in Music.` : "") + " ");
+    const link = document.createElement("a");
+    link.href = "#shortcutSetup"; link.textContent = "How to set up the shortcut";
+    link.addEventListener("click", e => { e.preventDefault(); $("shortcutSetup").open = true; $("shortcutSetup").scrollIntoView({ block: "start" }); });
+    $("shortcutHint").appendChild(link);
   }
   $("shortcutBtn").addEventListener("click", async () => {
     const plan = shortcutPlan(drafts[active]);
