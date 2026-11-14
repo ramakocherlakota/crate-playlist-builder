@@ -21,7 +21,7 @@ The export also records each song's iCloud status. Crate marks songs iCloud won'
 
 ### Adding songs from the phone with Shortcuts
 
-For a playlist whose changes are only additions (or a new playlist), **Add with Shortcuts** runs a one-time-built shortcut, `Crate Add Songs`, on the device itself: it finds each song by title, artist and album and adds it (creating the playlist if needed), then returns to Crate with any songs it couldn't find, which stay pending. With Sync Library on, iCloud carries the change to the Mac. Shortcuts can't remove songs or rename playlists, so those still go through the Mac script (or are done by hand in Music). Setup steps are in the app under **Set up the Crate shortcut**.
+For any playlist with additions (or a new playlist), **Add with Shortcuts** runs a one-time-built shortcut, `Crate Add Songs`, on the device itself: it finds each song by title, artist and album and adds it (creating the playlist if needed), then returns to Crate with any songs it couldn't find, which stay pending. With Sync Library on, iCloud carries the change to the Mac. Shortcuts can't remove songs or rename playlists, so only the additions are sent (to the playlist's current name in Music); removals and a rename stay pending for the Mac script or doing by hand in Music. Setup steps are in the app under **Set up the Crate shortcut**.
 
 ### Changes, not rewrites
 

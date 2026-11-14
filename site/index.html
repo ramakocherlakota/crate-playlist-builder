@@ -289,7 +289,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
       </ol>
       <details class="apple-only setup">
         <summary>Set up the Crate shortcut (once)</summary>
-        <p><strong>Add with Shortcuts</strong> adds songs to the highlighted playlist (or creates it) right on this device, without the Mac. With Sync Library on, the change reaches your other devices. It can only add: removals and renames still need the Mac script, or doing by hand in Music.</p>
+        <p><strong>Add with Shortcuts</strong> adds songs to the highlighted playlist (or creates it) right on this device, without the Mac. With Sync Library on, the change reaches your other devices. It only does the additions: any removals or a rename stay pending for the Mac script, or doing by hand in Music.</p>
         <p>In the Shortcuts app, tap <strong>+</strong> and name the new shortcut exactly <code>Crate Add Songs</code>. Then add these actions in order (tap a blue field to pick a variable):</p>
         <ol>
           <li><strong>Get Dictionary from Input</strong>, input: <em>Shortcut Input</em>.</li>
@@ -1407,35 +1407,42 @@ end exportLibrary
   $("applyBtn").addEventListener("click", applyToSpotify);
 
   // ---------- Apple Music: add songs on this device with a Shortcut ----------
-  // Shortcuts can add songs to a playlist and create playlists, but not remove songs or rename, so this path
-  // is offered only for a playlist whose changes are additions. The shortcut reports back which songs it couldn't
-  // find ("missing:0,3" by position), and Crate marks the rest as done.
+  // Shortcuts can add songs to a playlist and create playlists, but not remove songs or rename, so this path sends
+  // only a playlist's additions; removals and a rename stay pending for the Mac script or doing by hand in Music.
+  // The shortcut reports back which songs it couldn't find ("missing:0,3" by position); the rest are marked done.
   const SHORTCUT_NAME = "Crate Add Songs";
   const PENDING_KEY = "crate-playlist-builder:shortcut-pending";
   function shortcutPlan(d) {
     if (!d || library.sample) return { ok: false, why: library.sample ? "Load your library first." : "" };
     const name = d.name.trim() || "Untitled";
-    if (d.orig && isRenamed(d)) return { ok: false, why: "Shortcuts can't rename a playlist; use the Mac script for this one." };
+    // Until a rename is applied, Music still knows the playlist by its old name.
+    const target = d.orig ? d.origName : name;
     const removes = d.orig ? [...d.orig].filter(id => !d.ids.has(id)).length : 0;
-    if (removes) return { ok: false, why: `This playlist also has ${removes} removal${removes === 1 ? "" : "s"}, which Shortcuts can't do. Use the Mac script, or remove ${removes === 1 ? "it" : "them"} by hand in Music.` };
+    const renamed = !!d.orig && isRenamed(d);
     const adds = orderedIds(d.orig ? new Set([...d.ids].filter(id => !d.orig.has(id))) : d.ids);
-    if (!adds.length) return { ok: false, why: "" };
-    return { ok: true, name, create: !d.orig, adds };
+    if (!adds.length) return { ok: false, why: removes || renamed ? "Shortcuts can only add songs. Use the Mac script for removals and renames, or do them by hand in Music." : "" };
+    return { ok: true, name, target, create: !d.orig, adds, removes, renamed };
   }
   function renderShortcutBtn() {
     const plan = shortcutPlan(drafts[active]);
     $("shortcutBtn").disabled = !plan.ok;
     $("shortcutBtn").textContent = plan.ok ? `Add ${plan.adds.length} song${plan.adds.length === 1 ? "" : "s"} with Shortcuts` : "Add with Shortcuts";
-    $("shortcutHint").textContent = plan.ok ? `Runs the “${SHORTCUT_NAME}” shortcut${plan.create ? `, which creates “${plan.name}”` : ""}. Set it up once below.` : plan.why;
+    const leftover = [];
+    if (plan.removes) leftover.push(`${plan.removes} removal${plan.removes === 1 ? "" : "s"}`);
+    if (plan.renamed) leftover.push(`the rename to “${plan.name}”`);
+    $("shortcutHint").textContent = !plan.ok ? plan.why
+      : `Runs the “${SHORTCUT_NAME}” shortcut${plan.create ? `, which creates “${plan.target}”` : ""}.`
+        + (leftover.length ? ` Shortcuts can only add, so ${leftover.join(" and ")} will stay pending for the Mac script or doing by hand in Music.` : "")
+        + " Set it up once below.";
   }
   $("shortcutBtn").addEventListener("click", async () => {
     const plan = shortcutPlan(drafts[active]);
     if (!plan.ok) return;
     const token = Math.random().toString(36).slice(2, 10);
     const pids = plan.adds.map(id => trackById.get(id)?.pid);
-    try { localStorage.setItem(PENDING_KEY, JSON.stringify({ token, name: plan.name, create: plan.create, pids, at: Date.now() })); } catch (e) {}
+    try { localStorage.setItem(PENDING_KEY, JSON.stringify({ token, name: plan.name, target: plan.target, create: plan.create, pids, at: Date.now() })); } catch (e) {}
     const payload = {
-      playlist: plan.name, create: plan.create ? "yes" : "no",
+      playlist: plan.target, create: plan.create ? "yes" : "no",
       songs: plan.adds.map((id, i) => { const t = trackById.get(id); return { index: String(i), title: t.name, artist: t.artist, album: t.album }; }),
     };
     await saveDraftsNow();  // the page reloads when Shortcuts sends you back, so save the edits first
@@ -1469,11 +1476,13 @@ end exportLibrary
     if (d) {
       // What the shortcut added becomes part of the starting point; anything it couldn't find stays pending.
       d.orig = new Set([...(d.orig || []), ...doneIds]);
-      if (pending.create) { d.origName = pending.name; d.origPid = ""; }
+      if (pending.create) { d.origName = pending.target || pending.name; d.origPid = ""; }
       d.origAt = Date.now();
       refresh(); saveDraftsNow();
     }
-    $("bannerText").textContent = `Shortcuts added ${doneIds.length} song${doneIds.length === 1 ? "" : "s"} to “${pending.name}”.`
+    const left = d ? [...(d.orig || [])].filter(id => !d.ids.has(id)).length : 0;
+    $("bannerText").textContent = `Shortcuts added ${doneIds.length} song${doneIds.length === 1 ? "" : "s"} to “${pending.target || pending.name}”.`
+      + (left ? ` ${left} removal${left === 1 ? " is" : "s are"} still pending: run the Mac script, or remove ${left === 1 ? "it" : "them"} by hand in Music.` : "")
       + (missingNames.length ? ` It couldn't find ${missingNames.map(n => `“${n}”`).join(", ")}; ${missingNames.length === 1 ? "that one stays" : "those stay"} pending.` : "")
       + (m ? "" : " (The shortcut didn't report back which songs it found, so check the playlist in Music.)");
   }
