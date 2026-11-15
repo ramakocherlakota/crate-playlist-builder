@@ -130,7 +130,8 @@ shortcuts sign --mode anyone --input crate-add-songs-unsigned.shortcut --output 
         <ul><li>The first blank should already say <strong>Dictionary Value</strong>.</li><li>Tap <span class="blank">Condition</span> → choose <strong>has any value</strong>. (Crate only sends <code>create</code> when the playlist needs making.)</li></ul></div></li>
       <li><span class="n">8</span><div>Add <span class="act">Create Playlist</span>.
         <p class="drag">Drag it up so it sits between <strong>If</strong> and <strong>Otherwise</strong>.</p>
-        <ul><li>Tap its name blank (it may say <span class="blank">Playlist Name</span> or <span class="blank">Name</span>) → pick the variable <strong>Playlist Name</strong> from the bar.</li></ul></div></li>
+        <ul><li>Tap its name blank (it may say <span class="blank">Playlist Name</span> or <span class="blank">Name</span>) → pick the variable <strong>Playlist Name</strong> from the bar.</li></ul>
+        <p>Then add <span class="act">Wait</span>, drag it directly under Create Playlist (still above <strong>Otherwise</strong>), and set it to <strong>3 seconds</strong>. A brand-new playlist can't be found by name straight away, so without the pause the songs have nowhere to go.</p></div></li>
     </ol>
   </section>
 

@@ -72,6 +72,8 @@ create = get_value("create", dictionary)
 g = new_id()
 if_start(g, create, HAS_ANY_VALUE)
 add("is.workflow.actions.createplaylist", UUID=new_id(), WFPlaylistName=text("", named("Playlist Name")))
+# A playlist created moments ago can't yet be found by name, so Add to Playlist would silently add nowhere.
+add("is.workflow.actions.delay", WFDelayTime=3)
 if_otherwise(g)
 if_end(g)
 

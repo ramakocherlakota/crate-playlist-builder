@@ -298,7 +298,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
           <li><strong>Get Dictionary from Input</strong>, input: <em>Shortcut Input</em>.</li>
           <li><strong>Get Dictionary Value</strong>: Value for <code>playlist</code> in <em>Dictionary</em>. Then <strong>Set Variable</strong> <code>Playlist Name</code> to it.</li>
           <li><strong>Get Dictionary Value</strong>: Value for <code>create</code> in <em>Dictionary</em>.</li>
-          <li><strong>If</strong> that value <em>has any value</em>: <strong>Create Playlist</strong> named <em>Playlist Name</em>. <strong>End If</strong>.</li>
+          <li><strong>If</strong> that value <em>has any value</em>: <strong>Create Playlist</strong> named <em>Playlist Name</em>, then <strong>Wait</strong> 3 seconds (a new playlist can't be found by name straight away). <strong>End If</strong>.</li>
           <li><strong>Get Dictionary Value</strong>: Value for <code>songs</code> in <em>Dictionary</em> (the one from step 1).</li>
           <li><strong>Repeat with Each</strong> item in that value. Inside the repeat:
             <ol>
