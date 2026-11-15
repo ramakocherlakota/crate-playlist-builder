@@ -56,6 +56,9 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--hover)
 .drag { background: var(--accent-soft); color: var(--accent); border-radius: 8px; padding: 8px 12px; font-size: 15px; margin: 10px 0 0; }
 .note { background: var(--warn-bg); color: var(--warn-fg); border-radius: 8px; padding: 8px 12px; font-size: 15px; margin: 10px 0 0; }
 .check { margin-top: 10px; font-size: 15px; color: var(--muted); }
+.term { font-family: var(--font-mono); font-size: 13.5px; background: var(--fg); color: var(--bg); border-radius: 8px; padding: 10px 12px; margin: 8px 0 0; overflow-x: auto; white-space: pre; }
+.dl { display: inline-block; margin-top: 6px; background: var(--accent); color: var(--surface); text-decoration: none; font-weight: 600; padding: 8px 14px; border-radius: 8px; }
+.or { text-align: center; color: var(--muted); font-size: 14px; margin: 0; }
 .check strong { color: var(--fg); }
 </style>
 </head>
@@ -66,6 +69,26 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--hover)
     <a class="back" href="./">← Back to Crate</a>
   </header>
   <p class="lede">Step-by-step instructions for building the <strong>Crate Add Songs</strong> shortcut on your iPhone or iPad. You only do this once. Afterwards, Crate's <strong>Add with Shortcuts</strong> button adds songs to your playlists right on the phone, without the Mac.</p>
+
+  <section aria-labelledby="h-quick">
+    <h2 id="h-quick">Quick way: import a ready-made shortcut (needs your Mac)</h2>
+    <p>Instead of building it by hand, download the shortcut file, have your Mac sign it (Apple only imports signed shortcuts), and add it.</p>
+    <ol class="steps">
+      <li><span class="n">1</span><div>On your Mac, download the file:<br><a class="dl" href="crate-add-songs-unsigned.shortcut" download>Download crate-add-songs-unsigned.shortcut</a></div></li>
+      <li><span class="n">2</span><div>Open <strong>Terminal</strong> (Applications → Utilities), paste these two lines and press Return:
+        <div class="term">cd ~/Downloads
+shortcuts sign --mode anyone --input crate-add-songs-unsigned.shortcut --output "Crate Add Songs.shortcut"</div>
+        <p class="check">It takes a few seconds and prints nothing when it works. The new file's name becomes the shortcut's name, so keep it as <code>Crate Add Songs.shortcut</code>.</p></div></li>
+      <li><span class="n">3</span><div>In Finder, double-click <strong>Crate Add Songs.shortcut</strong> in Downloads, then click <strong>Add Shortcut</strong>.
+        <ul>
+          <li>If Shortcuts syncs through iCloud (on the iPhone: Settings → Apps → Shortcuts → <strong>iCloud Sync</strong>), it appears on your phone within a minute or so.</li>
+          <li>Otherwise, AirDrop the signed file to your iPhone and tap <strong>Add Shortcut</strong> there.</li>
+        </ul></div></li>
+      <li><span class="n">4</span><div>Open it in Shortcuts and compare it with the steps below, especially the three conditions in <strong>Find Music</strong> (step 14) and the playlist in <strong>Add to Playlist</strong> (step 16). If an action has a blank that didn't come through, fill it in as the steps describe.</div></li>
+    </ol>
+    <p class="note">This file was written by hand from Shortcuts' file format and hasn't been tested on a device yet. If signing reports an error, or parts are missing after importing, note the details.</p>
+  </section>
+  <p class="or">or build it yourself:</p>
 
   <section aria-labelledby="h-basics">
     <h2 id="h-basics">How the Shortcuts editor works</h2>
