@@ -108,6 +108,20 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
 .muted { color: var(--muted); } .small { font-size: 13px; }
 body[data-ios] .not-ios, body:not([data-ios]) .mac-card .ios-only { display: none; }
 .banner-btns { display: inline-flex; gap: 6px; align-items: center; }
+/* Setup screen vs. the editor; nothing shows until Crate knows whether a library is saved. */
+body.booting .wrap { visibility: hidden; }
+body:not(.welcoming) #welcome { display: none; }
+body.welcoming .main, body.welcoming #undoBtn, body.welcoming .top .menu-wrap { display: none !important; }
+#welcome { max-width: 680px; margin: 6vh auto 0; display: flex; flex-direction: column; gap: 18px; }
+#welcome h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(1.7rem, 4.5vw, 2.3rem); letter-spacing: -0.02em; line-height: 1.15; margin: 0; text-wrap: balance; }
+#welcome > p { margin: 0; }
+.svc { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.svc-card { text-align: left; display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: 12px; font-size: 14px; color: var(--muted); }
+.svc-card b { color: var(--fg); font-size: 1.05rem; }
+.svc-card[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.setup-box { border: 2px dashed var(--line); border-radius: 12px; padding: 18px 20px; background: var(--surface); display: flex; flex-direction: column; gap: 12px; }
+.setup-box ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 12px; }
+.setup-box p { margin: 0; }
 .help { display: flex; flex-direction: column; gap: 10px; }
 .phone { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font-size: 13.5px; }
 .phone h2 { font-family: var(--font-display); font-weight: 600; font-size: 1rem; margin: 0 0 6px; }
@@ -248,7 +262,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 </style>
 </head>
-<body>
+<body class="booting">
 
 <header class="top">
   <div class="top-inner">
@@ -272,6 +286,29 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
 </header>
 
 <div class="wrap">
+  <!-- Setup: shown only until a library is loaded in this browser. -->
+  <section id="welcome" aria-labelledby="welcomeTitle">
+    <h1 id="welcomeTitle">Curate your playlists, Artist → Album → Song.</h1>
+    <p class="muted">Pick where your music lives. You only do this once: Crate remembers your library in this browser.</p>
+    <div class="svc" role="group" aria-label="Music service">
+      <button type="button" class="svc-card" data-source="apple" aria-pressed="false"><b>Apple Music</b><span>Load your library file, then apply changes with a script on your Mac, or Shortcuts on iPhone.</span></button>
+      <button type="button" class="svc-card" data-source="spotify" aria-pressed="false"><b>Spotify</b><span>Sign in, and your changes go straight to Spotify.</span></button>
+    </div>
+    <div class="setup-box apple-only">
+      <ol>
+        <li>In Music on your Mac: <kbd>File → Library → Export Library…</kbd><br><span class="muted small">Using an iPhone too? Save it to iCloud Drive › Crate, then load it from there on the phone.</span></li>
+        <li>Load it here: <button type="button" class="primary" id="welcomeLoad">Choose Library.xml…</button> <span class="muted small not-ios">or drop it anywhere on this page</span></li>
+      </ol>
+      <p class="muted small">The file stays in this browser; nothing is uploaded.</p>
+    </div>
+    <div class="setup-box spotify-only">
+      <p>Crate loads your Liked Songs, saved albums and your own playlists, and applies your changes directly.</p>
+      <div><button type="button" class="primary" id="welcomeConnect">Connect Spotify</button></div>
+      <p class="muted small">Needs the Crate Spotify developer app, whose owner has Premium.</p>
+    </div>
+    <p class="muted">Just looking? <button type="button" class="link" id="trySample">Try it with sample songs</button></p>
+  </section>
+
   <div class="banner" id="banner" hidden>
     <span id="bannerText"></span>
     <span class="banner-btns"><button type="button" class="primary" id="bannerLoad" hidden>Load your library</button><button type="button" class="ghost" id="bannerClose" aria-label="Dismiss">✕</button></span>
@@ -576,6 +613,25 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
   $("helpBtn").addEventListener("click", () => openPanel("help"));
   $("bannerClose").addEventListener("click", () => { $("banner").hidden = true; });
   $("bannerLoad").addEventListener("click", () => $("loadBtn").click());
+
+  // ---------- setup screen ----------
+  function setWelcome(on) {
+    document.body.classList.toggle("welcoming", on);
+    if (on && sampleBannerShown) { $("banner").hidden = true; sampleBannerShown = false; }
+  }
+  function doneBooting() { document.body.classList.remove("booting"); }
+  setTimeout(doneBooting, 2000);  // never stay blank if storage is slow or blocked
+  document.querySelectorAll(".svc-card").forEach(b => {
+    b.setAttribute("aria-pressed", String(b.dataset.source === source));
+    b.addEventListener("click", () => {
+      if (b.dataset.source === source) return;
+      try { localStorage.setItem(SOURCE_KEY, b.dataset.source); } catch (e) {}
+      location.replace(location.pathname);
+    });
+  });
+  $("welcomeLoad").addEventListener("click", () => $("file").click());
+  $("welcomeConnect").addEventListener("click", () => SP.connect());
+  $("trySample").addEventListener("click", () => { setWelcome(false); showSampleBanner(); });
   const sortKey = s => s.toLowerCase().replace(/^the\s+/, "");
   const fmtTime = ms => { const s = Math.round(ms / 1000); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), ss = s % 60; return h ? `${h}:${String(m).padStart(2,"0")}:${String(ss).padStart(2,"0")}` : `${m}:${String(ss).padStart(2,"0")}`; };
   const fmtLong = ms => { const m = Math.round(ms / 60000); return m >= 60 ? `${Math.floor(m/60)} hr ${m%60} min` : `${m} min`; };
@@ -1427,6 +1483,7 @@ end exportLibrary
       showSampleBanner();
       return;
     }
+    setWelcome(false);
     const when = new Date(lib.loadedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" });
     const service = source === "spotify" ? "Spotify" : "Apple Music";
     $("libChipText").textContent = `${service} · ${lib.tracks.length.toLocaleString()} songs · ${when}`;
@@ -1464,6 +1521,7 @@ end exportLibrary
     delete $("forgetBtn").dataset.confirm; $("forgetBtn").textContent = "Forget this library";
     loadLibrary(sampleLibrary());
     toggleMenu($("libChip"), $("libMenu"), false);
+    setWelcome(true);
     status(source === "spotify" ? "Disconnected from Spotify; your Spotify library and edits were removed from this browser." : "Your library and edits were removed from this browser.");
     renderLoadBtn();
   });
@@ -1647,7 +1705,8 @@ end exportLibrary
   if (source === "apple") {
     store.get("library").then(saved => {
       if (saved && saved.tracks && library.sample) loadLibrary({ tracks: saved.tracks, playlists: saved.playlists || [], loadedAt: saved.loadedAt, sample: false }, saved.fileName, { restored: true });
-    });
+      else if (library.sample) setWelcome(true);
+    }).finally(doneBooting);
   } else {
     $("dropHint").textContent = "Library files are for Apple Music";
     showSampleBanner();
@@ -1657,6 +1716,8 @@ end exportLibrary
       try { justConnected = await SP.finishSignIn(); } catch (e) { $("bannerText").textContent = e.message; }
       const saved = await store.get(K("library"));
       if (saved && saved.tracks && library.sample) loadLibrary({ tracks: saved.tracks, playlists: saved.playlists || [], loadedAt: saved.loadedAt, sample: false }, saved.fileName, { restored: true });
+      else if (library.sample) setWelcome(true);
+      doneBooting();
       renderLoadBtn();
       if (justConnected) refreshFromSpotify();
     })();
