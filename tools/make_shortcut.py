@@ -48,10 +48,16 @@ def set_variable(name, value):
     add("is.workflow.actions.setvariable", WFVariableName=name, WFInput=value)
 
 def if_start(group, subject, condition, compare=None):
-    params = dict(GroupingIdentifier=group, WFControlFlowMode=0, WFCondition=condition,
-                  WFInput={"Type": "Variable", "Variable": subject})
+    # Newer Shortcuts versions store an If's test as a condition table (WFConditions); older ones use the flat
+    # WFInput/WFCondition keys. Both are written so whichever the device reads is filled in. (The flat form alone
+    # imported with a blank input on iOS 18.)
+    test = {"WFCondition": condition, "WFInput": {"Type": "Variable", "Variable": subject}}
     if compare is not None:
-        params["WFConditionalActionString"] = compare
+        test["WFConditionalActionString"] = compare
+    params = dict(GroupingIdentifier=group, WFControlFlowMode=0, **test,
+                  WFConditions={"Value": {"WFActionParameterFilterPrefix": 1,
+                                          "WFActionParameterFilterTemplates": [test]},
+                                "WFSerializationType": "WFContentPredicateTableTemplate"})
     add("is.workflow.actions.conditional", **params)
 
 def if_otherwise(group):
