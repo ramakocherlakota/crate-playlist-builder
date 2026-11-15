@@ -41,23 +41,18 @@ def add(identifier, **params):
 def get_value(key, source):
     u = new_id()
     add("is.workflow.actions.getvalueforkey", UUID=u, WFGetDictionaryValueType="Value",
-        WFDictionaryKey=key, WFInput=source)
+        WFDictionaryKey=text(key), WFInput=source)
     return output_of(u, "Dictionary Value")
 
 def set_variable(name, value):
     add("is.workflow.actions.setvariable", WFVariableName=name, WFInput=value)
 
 def if_start(group, subject, condition, compare=None):
-    # Newer Shortcuts versions store an If's test as a condition table (WFConditions); older ones use the flat
-    # WFInput/WFCondition keys. Both are written so whichever the device reads is filled in. (The flat form alone
-    # imported with a blank input on iOS 18.)
-    test = {"WFCondition": condition, "WFInput": {"Type": "Variable", "Variable": subject}}
+    params = dict(GroupingIdentifier=group, WFControlFlowMode=0, WFCondition=condition,
+                  WFInput={"Type": "Variable", "Variable": subject})
     if compare is not None:
-        test["WFConditionalActionString"] = compare
-    params = dict(GroupingIdentifier=group, WFControlFlowMode=0, **test,
-                  WFConditions={"Value": {"WFActionParameterFilterPrefix": 1,
-                                          "WFActionParameterFilterTemplates": [test]},
-                                "WFSerializationType": "WFContentPredicateTableTemplate"})
+        # Must be a text token, not a bare string: a bare "yes" imported as a blank on iOS 18.
+        params["WFConditionalActionString"] = text(compare)
     add("is.workflow.actions.conditional", **params)
 
 def if_otherwise(group):
@@ -114,7 +109,7 @@ add("is.workflow.actions.repeat.each", GroupingIdentifier=loop, WFControlFlowMod
 
 # Part 4: report back to Crate
 combine_id = new_id()
-add("is.workflow.actions.text.combine", UUID=combine_id, WFTextSeparator="Custom", WFTextCustomSeparator=",",
+add("is.workflow.actions.text.combine", UUID=combine_id, WFTextSeparator="Custom", WFTextCustomSeparator=text(","),
     text=named("Missing"))
 text_id = new_id()
 add("is.workflow.actions.gettext", UUID=text_id, WFTextActionText=text("missing:", output_of(combine_id, "Combined Text")))
