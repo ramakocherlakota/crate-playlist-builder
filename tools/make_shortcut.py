@@ -5,8 +5,8 @@ Apple only imports signed shortcuts, so sign the output on a Mac:
     shortcuts sign --mode anyone --input crate-add-songs-unsigned.shortcut --output "Crate Add Songs.shortcut"
 The imported shortcut takes its name from the signed file's name.
 
-It mirrors the steps in site/shortcut-setup.html: read Crate's JSON (playlist, create, songs[title, artist,
-album, index]), create the playlist if asked, add each song found by Find Music, and output
+It mirrors the steps in site/shortcut-setup.html: read Crate's JSON (playlist, songs[title, artist, album,
+index], and "create" only when the playlist must be made), create the playlist if asked, add each song found by Find Music, and output
 "missing:<indexes>" for the songs it couldn't find.
 """
 import plistlib
@@ -47,13 +47,11 @@ def get_value(key, source):
 def set_variable(name, value):
     add("is.workflow.actions.setvariable", WFVariableName=name, WFInput=value)
 
-def if_start(group, subject, condition, compare=None):
-    params = dict(GroupingIdentifier=group, WFControlFlowMode=0, WFCondition=condition,
-                  WFInput={"Type": "Variable", "Variable": subject})
-    if compare is not None:
-        # Must be a text token, not a bare string: a bare "yes" imported as a blank on iOS 18.
-        params["WFConditionalActionString"] = text(compare)
-    add("is.workflow.actions.conditional", **params)
+def if_start(group, subject, condition):
+    # Only presence tests are used: Shortcuts won't offer "is" for an untyped dictionary value, so a text
+    # comparison imports with its text blank. Crate omits "create" unless the playlist must be made.
+    add("is.workflow.actions.conditional", GroupingIdentifier=group, WFControlFlowMode=0, WFCondition=condition,
+        WFInput={"Type": "Variable", "Variable": subject})
 
 def if_otherwise(group):
     add("is.workflow.actions.conditional", GroupingIdentifier=group, WFControlFlowMode=1)
@@ -61,7 +59,7 @@ def if_otherwise(group):
 def if_end(group):
     add("is.workflow.actions.conditional", GroupingIdentifier=group, WFControlFlowMode=2, UUID=new_id())
 
-IS, HAS_ANY_VALUE = 4, 100  # Shortcuts' condition codes
+IS, HAS_ANY_VALUE = 4, 100  # Shortcuts' condition codes (IS is used by Find Music's filters)
 
 # Part 1: read what Crate sends
 dict_id = new_id()
@@ -72,7 +70,7 @@ set_variable("Playlist Name", get_value("playlist", dictionary))
 # Part 2: create the playlist if Crate asks
 create = get_value("create", dictionary)
 g = new_id()
-if_start(g, create, IS, "yes")
+if_start(g, create, HAS_ANY_VALUE)
 add("is.workflow.actions.createplaylist", UUID=new_id(), WFPlaylistName=text("", named("Playlist Name")))
 if_otherwise(g)
 if_end(g)

@@ -127,7 +127,7 @@ shortcuts sign --mode anyone --input crate-add-songs-unsigned.shortcut --output 
       <li><span class="n">6</span><div>Add another <span class="act">Get Dictionary Value</span>.
         <ul><li><span class="blank">Key</span> → type <code>create</code>.</li><li>Tap <span class="blank">Dictionary</span> → <strong>Select Variable</strong> → tap the <strong>Get Dictionary from Input</strong> action (step 3).</li></ul></div></li>
       <li><span class="n">7</span><div>Add <span class="act">If</span>. It appears together with <strong>Otherwise</strong> and <strong>End If</strong>.
-        <ul><li>The first blank should already say <strong>Dictionary Value</strong>.</li><li>Tap <span class="blank">Condition</span> → choose <strong>is</strong>.</li><li>Tap <span class="blank">Text</span> → type <code>yes</code>.</li></ul></div></li>
+        <ul><li>The first blank should already say <strong>Dictionary Value</strong>.</li><li>Tap <span class="blank">Condition</span> → choose <strong>has any value</strong>. (Crate only sends <code>create</code> when the playlist needs making.)</li></ul></div></li>
       <li><span class="n">8</span><div>Add <span class="act">Create Playlist</span>.
         <p class="drag">Drag it up so it sits between <strong>If</strong> and <strong>Otherwise</strong>.</p>
         <ul><li>Tap its name blank (it may say <span class="blank">Playlist Name</span> or <span class="blank">Name</span>) → pick the variable <strong>Playlist Name</strong> from the bar.</li></ul></div></li>

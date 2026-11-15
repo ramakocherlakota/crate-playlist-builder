@@ -298,7 +298,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
           <li><strong>Get Dictionary from Input</strong>, input: <em>Shortcut Input</em>.</li>
           <li><strong>Get Dictionary Value</strong>: Value for <code>playlist</code> in <em>Dictionary</em>. Then <strong>Set Variable</strong> <code>Playlist Name</code> to it.</li>
           <li><strong>Get Dictionary Value</strong>: Value for <code>create</code> in <em>Dictionary</em>.</li>
-          <li><strong>If</strong> that value <em>is</em> <code>yes</code>: <strong>Create Playlist</strong> named <em>Playlist Name</em>. <strong>End If</strong>.</li>
+          <li><strong>If</strong> that value <em>has any value</em>: <strong>Create Playlist</strong> named <em>Playlist Name</em>. <strong>End If</strong>.</li>
           <li><strong>Get Dictionary Value</strong>: Value for <code>songs</code> in <em>Dictionary</em> (the one from step 1).</li>
           <li><strong>Repeat with Each</strong> item in that value. Inside the repeat:
             <ol>
@@ -1449,8 +1449,11 @@ end exportLibrary
     const token = Math.random().toString(36).slice(2, 10);
     const pids = plan.adds.map(id => trackById.get(id)?.pid);
     try { localStorage.setItem(PENDING_KEY, JSON.stringify({ token, name: plan.name, target: plan.target, create: plan.create, pids, at: Date.now() })); } catch (e) {}
+    // "create" is present only when the playlist must be made: the shortcut tests it with "has any value",
+    // because Shortcuts won't compare a dictionary value as text.
     const payload = {
-      playlist: plan.target, create: plan.create ? "yes" : "no",
+      playlist: plan.target,
+      ...(plan.create ? { create: "yes" } : {}),
       songs: plan.adds.map((id, i) => { const t = trackById.get(id); return { index: String(i), title: t.name, artist: t.artist, album: t.album }; }),
     };
     await saveDraftsNow();  // the page reloads when Shortcuts sends you back, so save the edits first
