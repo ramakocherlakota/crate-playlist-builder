@@ -6,6 +6,8 @@ Live at **https://crate.ramakocherlakota.net**
 
 ## How it works
 
+The screen is a playlist list on the left and the open playlist on the right: rename it in place, search or filter the tree (**All songs / In playlist / Changes**), and tick songs. The library chip at the top holds loading, refreshing, switching between Apple Music and Spotify, and forgetting the library; **View** holds grouping and sort options; **Review & apply** shows every change and the way to apply it on this device; **Help** has the instructions.
+
 1. In Music on a Mac: **File → Library → Export Library…** and save the XML.
 2. Load it on the page (or drag it on). Everything runs in your browser; nothing is uploaded. The library, your edits and your view (search, toggles, open folders) are remembered in this browser (IndexedDB and localStorage) until you choose **Forget this library**.
 3. Tick artists, albums or songs. Open any number of existing playlists (or start new ones) and switch between them; each keeps its own changes. Press ♪ next to a song to hear Apple's 30-second preview (looked up through the public iTunes Search API).
@@ -17,7 +19,7 @@ With **Afterwards, save an updated Library.xml to iCloud Drive › Crate** ticke
 
 The playlists themselves reach the phone's Music app through **Sync Library** (Apple Music or iTunes Match) automatically, or, without a subscription, by syncing the iPhone with the Mac in Finder (by cable, or over Wi-Fi once **Show this iPhone when on Wi-Fi** is ticked).
 
-The export also records each song's iCloud status. Crate marks songs iCloud won't store (duplicate, ineligible and so on) with **won't sync**, and warns in the banner, the playlist list and Show changes when a playlist contains one, because such a playlist won't reach your other devices.
+The export also records each song's iCloud status. Crate marks songs iCloud won't store (duplicate, ineligible and so on) with **won't sync**, and warns in the library menu, the playlist list and Review & apply when a playlist contains one, because such a playlist won't reach your other devices.
 
 ### Adding songs from the phone with Shortcuts
 
@@ -25,11 +27,11 @@ For any playlist with additions (or a new playlist), **Add with Shortcuts** runs
 
 ### Changes, not rewrites
 
-The script applies only what you changed: unticked songs are removed, newly ticked songs are added at the end (existing order is kept), and a renamed playlist is renamed in Music. Anything already done is skipped, so scripts made on different devices can be run in any order, and running one twice is harmless. **Undo** (or ⌘Z) reverses the last change: ticks, renames, closing a playlist or Mark as applied. Loading a newer library (or refreshing from Spotify) keeps your unapplied edits on top of any changes made elsewhere. **Show changes** lists exactly which songs each playlist will gain or lose (with a per-song Undo). After exporting a script, **Mark as applied** resets the change counts so the next script only carries newer edits.
+The script applies only what you changed: unticked songs are removed, newly ticked songs are added at the end (existing order is kept), and a renamed playlist is renamed in Music. Anything already done is skipped, so scripts made on different devices can be run in any order, and running one twice is harmless. **Undo** (or ⌘Z) reverses the last change: ticks, renames, closing a playlist or Mark as applied. Loading a newer library (or refreshing from Spotify) keeps your unapplied edits on top of any changes made elsewhere. **Review & apply** lists exactly which songs each playlist will gain or lose (with a per-song Undo), and the tree's **Changes** filter highlights them in place. After exporting a script, **Mark as applied** resets the change counts so the next script only carries newer edits.
 
 ## Spotify
 
-Switch the page to **Spotify** (top right) to curate Spotify playlists instead. Crate signs in with Spotify's PKCE flow straight from the browser (no server, no client secret) and builds the same Artist → Album → Song tree from your Liked Songs, saved albums and the songs in playlists you own or collaborate on. That library is cached in the browser; **Refresh from Spotify** reloads it. Editing works the same (several playlists at once, Show changes, Undo), and **Apply to Spotify** sends the changes directly: unticked songs are removed, new ones appended, renames applied and new playlists created (private). Requests are paced to respect Spotify's rate limits, and a spent development-mode quota is reported plainly.
+Switch to **Spotify** from the library menu at the top to curate Spotify playlists instead. Crate signs in with Spotify's PKCE flow straight from the browser (no server, no client secret) and builds the same Artist → Album → Song tree from your Liked Songs, saved albums and the songs in playlists you own or collaborate on. That library is cached in the browser; **Refresh from Spotify** reloads it. Editing works the same (several playlists at once, the Changes filter, Undo), and **Apply to Spotify** sends the changes directly: unticked songs are removed, new ones appended, renames applied and new playlists created (private). Requests are paced to respect Spotify's rate limits, and a spent development-mode quota is reported plainly.
 
 Each service keeps its own library and edits in the browser; switching reloads the page.
 
