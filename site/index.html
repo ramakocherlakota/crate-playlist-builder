@@ -461,11 +461,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
               <li><strong>If</strong> <em>Music</em> <em>has any value</em>: <strong>Add to Playlist</strong>, adding <em>Music</em> to <em>Playlist Name</em>. <strong>Otherwise</strong>: <strong>Get Dictionary Value</strong> <code>index</code> in <em>Repeat Item</em>, then <strong>Add to Variable</strong> <code>Missing</code>. <strong>End If</strong>.</li>
             </ol>
           </li>
-          <li>After <strong>End Repeat</strong>: <strong>Combine Text</strong> <em>Missing</em> with <strong>Custom</strong> separator <code>,</code>; <strong>Text</strong> <code>missing:</code> followed by <em>Combined Text</em>; <strong>Stop and Output</strong> that text.</li>
-        </ol>
-          </li>
-          <li>After <strong>End Repeat</strong>: <strong>Combine Text</strong> <em>Missing</em> with <strong>Custom</strong> separator <code>,</code>.</li>
-          <li><strong>Text</strong>: <code>missing:</code> followed by <em>Combined Text</em>. Then <strong>Stop and Output</strong> that text.</li>
+          <li>After <strong>End Repeat</strong>: <strong>Combine Text</strong> <em>Missing</em> with <strong>Custom</strong> separator <code>,</code>; <strong>Text</strong> <code>v2 missing:</code> followed by <em>Combined Text</em>; <strong>Stop and Output</strong> that text. (The <code>v2</code> tells Crate which version you have, so it can say when there's a newer one.)</li>
         </ol>
         <p>Songs are matched by title, artist and album, so the first run is worth checking in Music. If Shortcuts asks for permission to use your music library, allow it.</p>
       </details>
@@ -1588,8 +1584,13 @@ end exportLibrary
   // the additions of every playlist with changes; removals and renames stay pending for the Mac script or doing by
   // hand in Music. Crate sends one flat list of songs, each naming its playlist (the first song of a playlist that
   // doesn't exist yet also carries "create"), so the shortcut needs only one loop. It reports back the songs it
-  // couldn't find ("missing:0,3" by position in that list); the rest are marked done.
+  // couldn't find ("v2 missing:0,3", by position in that list); the rest are marked done.
+  // The "v2" is the shortcut's version. Bump SHORTCUT_VERSION with VERSION in tools/make_shortcut.py when the shortcut
+  // changes in a way Crate depends on; older copies (and those from before versions, which send none) are then
+  // asked to reinstall from SHORTCUT_INSTALL_URL.
   const SHORTCUT_NAME = "Crate Add Songs";
+  const SHORTCUT_VERSION = 2;
+  const SHORTCUT_INSTALL_URL = "shortcut-setup.html#h-quick";
   const PENDING_KEY = "crate-playlist-builder:shortcut-pending";
   function shortcutPlan() {
     if (library.sample) return { ok: false, why: "Load your library first." };
@@ -1637,7 +1638,7 @@ end exportLibrary
     await saveDraftsNow();  // the page reloads when Shortcuts sends you back, so save the edits first
     const back = `${location.origin}${location.pathname}?crate_shortcut=${token}&outcome=`;
     const enc = encodeURIComponent;  // Shortcuts doesn't read "+" as a space, so avoid URLSearchParams here
-    location.href = `shortcuts://x-callback-url/run-shortcut?name=${enc(SHORTCUT_NAME)}&input=text&text=${enc(JSON.stringify({ songs }))}`
+    location.href = `shortcuts://x-callback-url/run-shortcut?name=${enc(SHORTCUT_NAME)}&input=text&text=${enc(JSON.stringify({ v: SHORTCUT_VERSION, songs }))}`
       + `&x-success=${enc(back + "ok")}&x-cancel=${enc(back + "cancel")}&x-error=${enc(back + "error")}`;
   });
   // Shortcuts returns here with ?crate_shortcut=<token>&outcome=ok|cancel|error and, on success, result=<output>.
@@ -1652,10 +1653,15 @@ end exportLibrary
     try { pending = JSON.parse(localStorage.getItem(PENDING_KEY) || "null"); localStorage.removeItem(PENDING_KEY); } catch (e) {}
     if (!pending || pending.token !== ret.token || !pending.sent) return;
     $("banner").hidden = false;
+    const updateLink = text => { const a = document.createElement("a"); a.href = SHORTCUT_INSTALL_URL; a.textContent = text; return a; };
     if (ret.outcome !== "ok") {
-      $("bannerText").textContent = ret.outcome === "cancel" ? "The shortcut was cancelled, so nothing was marked as added." : `The “${SHORTCUT_NAME}” shortcut reported an error, so nothing was marked as added. Check it's set up as described under “Set up the Crate shortcut” in Help.`;
+      if (ret.outcome === "cancel") { $("bannerText").textContent = "The shortcut was cancelled, so nothing was marked as added. Check the playlists in Music in case some songs went in."; return; }
+      $("bannerText").textContent = `The “${SHORTCUT_NAME}” shortcut stopped with an error, so nothing was marked as added (check the playlists in Music in case some songs went in). The usual cause is an out-of-date copy of the shortcut: `;
+      $("bannerText").append(updateLink(`install version ${SHORTCUT_VERSION}`), " and delete the old one.");
       return;
     }
+    const v = /\bv(\d+)\b/.exec(ret.result || "");
+    const outdated = !v || Number(v[1]) < SHORTCUT_VERSION;
     const m = /missing:([\d,\s]*)/.exec(ret.result || "");
     const missing = new Set(m ? m[1].split(",").map(x => x.trim()).filter(Boolean).map(Number) : []);
     const idOf = new Map(library.tracks.map(t => [t.pid, t.id]));
@@ -1681,6 +1687,7 @@ end exportLibrary
       + (missingNames.length ? ` It couldn't find ${missingNames.map(n => `“${n}”`).join(", ")}; ${missingNames.length === 1 ? "that one stays" : "those stay"} pending.` : "")
       + (left.length ? ` Still pending for the Mac script or doing by hand in Music: ${left.join(", ")}.` : "")
       + (m ? "" : " (The shortcut didn't report back which songs it found, so check the playlists in Music.)");
+    if (outdated) $("bannerText").append(" Your “" + SHORTCUT_NAME + "” shortcut is out of date: ", updateLink(`install version ${SHORTCUT_VERSION}`), " and delete the old one.");
   }
 
   // Spotify support was removed; clear what it stored in this browser.

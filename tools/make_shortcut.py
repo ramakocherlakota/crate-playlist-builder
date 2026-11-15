@@ -7,11 +7,16 @@ The imported shortcut takes its name from the signed file's name.
 
 It mirrors the steps in site/shortcut-setup.html: read Crate's JSON, a flat list of songs (index, playlist,
 title, artist, album, and "create" on the first song of a playlist that must be made), and for each song create
-its playlist if asked, find it with Find Music and add it, then output "missing:<indexes>" for songs not found.
+its playlist if asked, find it with Find Music and add it, then output "v<VERSION> missing:<indexes>" for songs
+not found. Crate reads the version and asks people to reinstall when theirs is older than SHORTCUT_VERSION in
+site/index.html, so bump both together (and the step-15 text in site/shortcut-setup.html and Crate's Help) whenever
+the shortcut changes in a way Crate depends on.
 """
 import plistlib
 import sys
 import uuid
+
+VERSION = 2
 
 def new_id():
     return str(uuid.uuid4()).upper()
@@ -110,7 +115,7 @@ combine_id = new_id()
 add("is.workflow.actions.text.combine", UUID=combine_id, WFTextSeparator="Custom", WFTextCustomSeparator=text(","),
     text=named("Missing"))
 text_id = new_id()
-add("is.workflow.actions.gettext", UUID=text_id, WFTextActionText=text("missing:", output_of(combine_id, "Combined Text")))
+add("is.workflow.actions.gettext", UUID=text_id, WFTextActionText=text(f"v{VERSION} missing:", output_of(combine_id, "Combined Text")))
 add("is.workflow.actions.output", WFOutput=text("", output_of(text_id, "Text")), WFNoOutputSurfaceBehavior="Do Nothing")
 
 shortcut = {
