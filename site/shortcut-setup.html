@@ -74,7 +74,7 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--hover)
     <h2 id="h-quick">Quick way: import a ready-made shortcut (needs your Mac)</h2>
     <p>Instead of building it by hand, download the shortcut file, have your Mac sign it (Apple only imports signed shortcuts), and add it.</p>
     <ol class="steps">
-      <li><span class="n">1</span><div>On your Mac, download the file:<br><a class="dl" href="crate-add-songs-unsigned.shortcut" download>Download crate-add-songs-unsigned.shortcut</a></div></li>
+      <li><span class="n">1</span><div>On your Mac, first delete any older <code>crate-add-songs-unsigned</code> files and <code>Crate Add Songs.shortcut</code> from Downloads. Otherwise the browser saves the new one as <code>crate-add-songs-unsigned-2.shortcut</code> (or similar) and step 2 signs the old one. Then download the file:<br><a class="dl" href="crate-add-songs-unsigned.shortcut?v=20261115" download="crate-add-songs-unsigned.shortcut">Download crate-add-songs-unsigned.shortcut</a></div></li>
       <li><span class="n">2</span><div>Open <strong>Terminal</strong> (Applications → Utilities), paste these two lines and press Return:
         <div class="term">cd ~/Downloads
 shortcuts sign --mode anyone --input crate-add-songs-unsigned.shortcut --output "Crate Add Songs.shortcut"</div>
