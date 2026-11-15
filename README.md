@@ -6,7 +6,7 @@ Live at **https://crate.ramakocherlakota.net**
 
 ## How it works
 
-The screen is a playlist list on the left and the open playlist on the right: rename it in place, search or filter the tree (**All songs / In playlist / Changes**), and tick songs. The library chip at the top holds loading, refreshing, switching between Apple Music and Spotify, and forgetting the library; **View** holds grouping and sort options; **Review & apply** shows every change and the way to apply it on this device; **Help** has the instructions.
+The screen is a playlist list on the left and the open playlist on the right: rename it in place, search or filter the tree (**All songs / In playlist / Changes**), and tick songs. The library chip at the top holds loading a newer library file, won't-sync warnings and forgetting the library; **View** holds grouping and sort options; **Review & apply** shows every change and the way to apply it on this device; **Help** has the instructions.
 
 1. In Music on a Mac: **File → Library → Export Library…** and save the XML.
 2. Load it on the page (or drag it on). Everything runs in your browser; nothing is uploaded. The library, your edits and your view (search, toggles, open folders) are remembered in this browser (IndexedDB and localStorage) until you choose **Forget this library**.
@@ -27,17 +27,9 @@ For any playlist with additions (or a new playlist), **Add with Shortcuts** runs
 
 ### Changes, not rewrites
 
-The script applies only what you changed: unticked songs are removed, newly ticked songs are added at the end (existing order is kept), and a renamed playlist is renamed in Music. Anything already done is skipped, so scripts made on different devices can be run in any order, and running one twice is harmless. **Undo** (or ⌘Z) reverses the last change: ticks, renames, closing a playlist or Mark as applied. Loading a newer library (or refreshing from Spotify) keeps your unapplied edits on top of any changes made elsewhere. **Review & apply** lists exactly which songs each playlist will gain or lose (with a per-song Undo), and the tree's **Changes** filter highlights them in place. After exporting a script, **Mark as applied** resets the change counts so the next script only carries newer edits.
+The script applies only what you changed: unticked songs are removed, newly ticked songs are added at the end (existing order is kept), and a renamed playlist is renamed in Music. Anything already done is skipped, so scripts made on different devices can be run in any order, and running one twice is harmless. **Undo** (or ⌘Z) reverses the last change: ticks, renames, closing a playlist or Mark as applied. Loading a newer library keeps your unapplied edits on top of any changes made elsewhere. **Review & apply** lists exactly which songs each playlist will gain or lose (with a per-song Undo), and the tree's **Changes** filter highlights them in place. After exporting a script, **Mark as applied** resets the change counts so the next script only carries newer edits.
 
-## Spotify
-
-Switch to **Spotify** from the library menu at the top to curate Spotify playlists instead. Crate signs in with Spotify's PKCE flow straight from the browser (no server, no client secret) and builds the same Artist → Album → Song tree from your Liked Songs, saved albums and the songs in playlists you own or collaborate on. That library is cached in the browser; **Refresh from Spotify** reloads it. Editing works the same (several playlists at once, the Changes filter, Undo), and **Apply to Spotify** sends the changes directly: unticked songs are removed, new ones appended, renames applied and new playlists created (private). Requests are paced to respect Spotify's rate limits, and a spent development-mode quota is reported plainly.
-
-Each service keeps its own library and edits in the browser; switching reloads the page.
-
-Spotify setup: a Spotify developer app with redirect URI `https://crate.ramakocherlakota.net/` and the Web API enabled (the client ID is in [`site/spotify.js`](site/spotify.js)). Since February 2026 Spotify requires the app owner to have Premium, and development-mode apps are limited to 5 users, each added under User Management.
-
-The app is [`site/index.html`](site/index.html) plus [`site/spotify.js`](site/spotify.js).
+The app is [`site/index.html`](site/index.html), plus the Shortcuts setup guide ([`site/shortcut-setup.html`](site/shortcut-setup.html)).
 
 ## Hosting
 

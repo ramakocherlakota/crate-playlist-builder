@@ -115,10 +115,6 @@ body.welcoming .main, body.welcoming #undoBtn, body.welcoming .top .menu-wrap { 
 #welcome { max-width: 680px; margin: 6vh auto 0; display: flex; flex-direction: column; gap: 18px; }
 #welcome h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(1.7rem, 4.5vw, 2.3rem); letter-spacing: -0.02em; line-height: 1.15; margin: 0; text-wrap: balance; }
 #welcome > p { margin: 0; }
-.svc { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
-.svc-card { text-align: left; display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: 12px; font-size: 14px; color: var(--muted); }
-.svc-card b { color: var(--fg); font-size: 1.05rem; }
-.svc-card[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .setup-box { border: 2px dashed var(--line); border-radius: 12px; padding: 18px 20px; background: var(--surface); display: flex; flex-direction: column; gap: 12px; }
 .setup-box ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 12px; }
 .setup-box p { margin: 0; }
@@ -216,8 +212,6 @@ aside h2 { font-family: var(--font-display); font-weight: 600; font-size: 1.2rem
 .check input { margin-top: 3px; accent-color: var(--accent); }
 .btns { display: flex; flex-wrap: wrap; gap: 8px; }
 .btns button { flex: 1 1 auto; }
-/* Which service the page is curating: Apple Music (file + script) or Spotify (applied directly). */
-body[data-source="spotify"] .apple-only, body[data-source="apple"] .spotify-only { display: none !important; }
 /* The Shortcuts path is for iPhone and iPad; on a Mac the script does more (exact matching, removals, renames). */
 body:not([data-ios]) .ios-only { display: none !important; }
 .status { font-size: 13px; color: var(--muted); min-height: 1.2em; }
@@ -273,7 +267,6 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
       <div class="menu" id="libMenu" hidden>
         <div class="lbl" id="libMenuLabel">Library</div>
         <button type="button" class="mi" id="loadBtn">Load library file…</button>
-        <button type="button" class="mi" id="switchSource">Switch to Spotify</button>
         <div id="libWarn" hidden></div>
         <div class="sep"></div>
         <button type="button" class="mi danger" id="forgetBtn" hidden>Forget this library</button>
@@ -289,22 +282,13 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
   <!-- Setup: shown only until a library is loaded in this browser. -->
   <section id="welcome" aria-labelledby="welcomeTitle">
     <h1 id="welcomeTitle">Curate your playlists, Artist → Album → Song.</h1>
-    <p class="muted">Pick where your music lives. You only do this once: Crate remembers your library in this browser.</p>
-    <div class="svc" role="group" aria-label="Music service">
-      <button type="button" class="svc-card" data-source="apple" aria-pressed="false"><b>Apple Music</b><span>Load your library file, then apply changes with a script on your Mac, or Shortcuts on iPhone.</span></button>
-      <button type="button" class="svc-card" data-source="spotify" aria-pressed="false"><b>Spotify</b><span>Sign in, and your changes go straight to Spotify.</span></button>
-    </div>
+    <p class="muted">Crate works with your Apple Music library. You only load it once: Crate remembers it in this browser.</p>
     <div class="setup-box apple-only">
       <ol>
         <li>In Music on your Mac: <kbd>File → Library → Export Library…</kbd><br><span class="muted small">Using an iPhone too? Save it to iCloud Drive › Crate, then load it from there on the phone.</span></li>
         <li>Load it here: <button type="button" class="primary" id="welcomeLoad">Choose Library.xml…</button> <span class="muted small not-ios">or drop it anywhere on this page</span></li>
       </ol>
       <p class="muted small">The file stays in this browser; nothing is uploaded.</p>
-    </div>
-    <div class="setup-box spotify-only">
-      <p>Crate loads your Liked Songs, saved albums and your own playlists, and applies your changes directly.</p>
-      <div><button type="button" class="primary" id="welcomeConnect">Connect Spotify</button></div>
-      <p class="muted small">Needs the Crate Spotify developer app, whose owner has Premium.</p>
     </div>
     <p class="muted">Just looking? <button type="button" class="link" id="trySample">Try it with sample songs</button></p>
   </section>
@@ -364,11 +348,6 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
     <div class="drawer-body">
       <div class="changes" id="changesList"></div>
 
-      <div class="card spotify-only">
-        <h3>Apply to Spotify</h3>
-        <p class="muted">Unticked songs are removed, new ones added at the end, renames and new playlists made.</p>
-        <div class="btns"><button class="primary" type="button" id="applyBtn" disabled>Apply to Spotify</button></div>
-      </div>
 
       <div class="card apple-only ios-only hl">
         <h3>On this iPhone</h3>
@@ -395,12 +374,6 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
     <div class="drawer-head"><h2 id="helpTitle">How Crate works</h2><button type="button" class="ghost" data-close aria-label="Close">✕</button></div>
     <div class="drawer-body">
   <div class="help" id="steps">
-      <ol class="steps spotify-only">
-        <li><b>1</b><span><strong>Connect Spotify</strong> (from the library menu at the top). Crate loads your Liked Songs, saved albums and your own playlists, and keeps them in this browser.</span></li>
-        <li><b>2</b><span>Pick or start playlists on the left, then tick artists, albums or songs on the right. Switch between playlists any time.</span></li>
-        <li><b>3</b><span>Press <strong>Review &amp; apply</strong>, check the changes, then <strong>Apply to Spotify</strong>. Unticked songs are removed, new ones added at the end, renames and new playlists made.</span></li>
-        <li><b>4</b><span>Works the same on your phone. Press <strong>Refresh from Spotify</strong> to pick up changes made in the Spotify app or another device.</span></li>
-      </ol>
       <div class="apple-only help">
       <ol class="steps">
         <li><b>1</b><span>In Music on your Mac: <kbd>File → Library → Export Library…</kbd> and save the XML.</span></li>
@@ -466,20 +439,10 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
 </div>
 <div class="drop-hint" id="dropHint" hidden>Drop your library .xml to load it</div>
 
-<script src="spotify.js"></script>
 <script>
 (function () {
-  // Which service this page curates. Each keeps its own library and edits; switching reloads the page.
-  const SP = window.CrateSpotify;
-  const SOURCE_KEY = "crate-playlist-builder:source";
-  let source = "apple";
-  try { source = localStorage.getItem(SOURCE_KEY) === "spotify" ? "spotify" : "apple"; } catch (e) {}
-  if (SP.isReturningFromSignIn()) source = "spotify";
-  try { localStorage.setItem(SOURCE_KEY, source); } catch (e) {}
-  document.body.dataset.source = source;
   // iPadOS reports itself as a Mac, so also check for a touch screen.
   if (/iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)) document.body.dataset.ios = "";
-  const K = key => source === "spotify" ? "spotify:" + key : key;  // storage key for this source
   // ---------- sample library (examples only) ----------
   const SAMPLE = [
     ["Radiohead", "OK Computer", 1997, ["Airbag",284,"Paranoid Android",383,"Subterranean Homesick Alien",267,"Exit Music (For a Film)",264,"Let Down",299,"Karma Police",261,"No Surprises",229,"Lucky",259]],
@@ -492,10 +455,8 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
     ["Nina Simone", "Wild Is the Wind", 1966, ["I Love Your Lovin' Ways",140,"Four Women",246,"Lilac Wine",233,"Wild Is the Wind",420]]
   ];
   function showSampleBanner() {
-    $("bannerText").innerHTML = source === "spotify"
-      ? "<strong>Sample songs.</strong> Connect Spotify to load your Liked Songs, saved albums and playlists."
-      : "<strong>Sample songs.</strong> These are examples to show how Crate works. Load your exported Music library (.xml) to see your own.";
-    $("bannerLoad").textContent = source === "spotify" ? "Connect Spotify" : "Load your library";
+    $("bannerText").innerHTML = "<strong>Sample songs.</strong> These are examples to show how Crate works. Load your exported Music library (.xml) to see your own.";
+    $("bannerLoad").textContent = "Load your library";
     $("bannerLoad").hidden = false; $("banner").hidden = false; sampleBannerShown = true;
   }
   let sampleBannerShown = false;
@@ -572,11 +533,6 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
   let boxes = [];                // rendered checkboxes: {el, ids, chip, row}
 
   const $ = id => document.getElementById(id);
-  $("switchSource").textContent = source === "spotify" ? "Switch to Apple Music" : "Switch to Spotify";
-  $("switchSource").addEventListener("click", () => {
-    try { localStorage.setItem(SOURCE_KEY, source === "spotify" ? "apple" : "spotify"); } catch (e) {}
-    location.replace(location.pathname);
-  });
 
   // ---------- menus and side panels ----------
   // Menus (library chip, View) close on an outside click or Escape; panels (Review & apply, Help) are modal.
@@ -621,16 +577,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
   }
   function doneBooting() { document.body.classList.remove("booting"); }
   setTimeout(doneBooting, 2000);  // never stay blank if storage is slow or blocked
-  document.querySelectorAll(".svc-card").forEach(b => {
-    b.setAttribute("aria-pressed", String(b.dataset.source === source));
-    b.addEventListener("click", () => {
-      if (b.dataset.source === source) return;
-      try { localStorage.setItem(SOURCE_KEY, b.dataset.source); } catch (e) {}
-      location.replace(location.pathname);
-    });
-  });
   $("welcomeLoad").addEventListener("click", () => $("file").click());
-  $("welcomeConnect").addEventListener("click", () => SP.connect());
   $("trySample").addEventListener("click", () => { setWelcome(false); showSampleBanner(); });
   const sortKey = s => s.toLowerCase().replace(/^the\s+/, "");
   const fmtTime = ms => { const s = Math.round(ms / 1000); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), ss = s % 60; return h ? `${h}:${String(m).padStart(2,"0")}:${String(ss).padStart(2,"0")}` : `${m}:${String(ss).padStart(2,"0")}`; };
@@ -896,11 +843,8 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
     const any = drafts.some(changed);
     $("copyBtn").disabled = !any; $("saveBtn").disabled = !any; $("shareBtn").disabled = !any; $("appliedBtn").disabled = !any;
     $("copyBtn").textContent = any && drafts.filter(changed).length > 1 ? `Copy script (${drafts.filter(changed).length} playlists)` : "Copy script";
-    $("scriptOut").value = any && source === "apple" ? buildScript() : "";
-    const nChanged = drafts.filter(changed).length;
-    $("applyBtn").disabled = !any || applying || library.sample;
+    $("scriptOut").value = any ? buildScript() : "";
     renderShortcutBtn();
-    $("applyBtn").textContent = applying ? "Applying…" : nChanged > 1 ? `Apply to Spotify (${nChanged} playlists)` : "Apply to Spotify";
     renderDrafts();
     fillPlaylists();
     renderChanges();
@@ -1346,7 +1290,7 @@ end exportLibrary
     sel.disabled = !shown;
     const editable = library.playlists.filter(p => !p.smart).length;
     sel.options[0].textContent = !editable ? (library.playlists.length ? "No editable playlists (smart playlists can't be edited)"
-        : source === "spotify" ? (library.sample ? "Connect Spotify to see your playlists" : "No playlists of your own in Spotify") : "No playlists in this file (use Export Library)")
+        : "No playlists in this file (use Export Library)")
       : shown ? "Open another playlist…" : "All your playlists are open";
   }
 
@@ -1380,7 +1324,7 @@ end exportLibrary
     clearTimeout(saveTimer); saveTimer = null;
     if (!saving || library.sample) return Promise.resolve();
     const pidOf = id => trackById.get(id)?.pid;
-    return store.set(K("drafts"), {
+    return store.set("drafts", {
       active,
       drafts: drafts.map(d => ({
         name: d.name, origName: d.origName, origPid: d.origPid || "", origAt: d.origAt || 0,
@@ -1393,13 +1337,13 @@ end exportLibrary
   addEventListener("pagehide", () => { if (saveTimer) saveDraftsNow(); });
   // Saved edits are keyed by persistent ID, so they carry over to a newer export of the library.
   async function restoreDrafts() {
-    const saved = await store.get(K("drafts"));
+    const saved = await store.get("drafts");
     if (!saved || !saved.drafts || !saved.drafts.length) return 0;
     const idOf = new Map(library.tracks.map(t => [t.pid, t.id]));
     let missing = 0;
     const toIds = pids => new Set(pids.map(p => idOf.get(p) || (missing++, null)).filter(Boolean));
     const pidOfId = new Map(library.tracks.map(t => [t.id, t.pid]));
-    let outside = 0;  // songs added or removed elsewhere (Spotify app, Music, another device) and picked up
+    let outside = 0;  // songs added or removed elsewhere (the Music app, another device) and picked up
     drafts = saved.drafts.map(d => {
       let ids = null, orig = null;
       let origName = d.origName, origPid = d.origPid || "", origAt = d.origAt || 0;
@@ -1485,8 +1429,7 @@ end exportLibrary
     }
     setWelcome(false);
     const when = new Date(lib.loadedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-    const service = source === "spotify" ? "Spotify" : "Apple Music";
-    $("libChipText").textContent = `${service} · ${lib.tracks.length.toLocaleString()} songs · ${when}`;
+    $("libChipText").textContent = `Apple Music · ${lib.tracks.length.toLocaleString()} songs · ${when}`;
     $("libChip").title = `${fileName}: ${lib.tracks.length.toLocaleString()} songs by ${artists.length.toLocaleString()} artists, ${lib.playlists.length} playlist${lib.playlists.length === 1 ? "" : "s"}, ${opts.restored ? "remembered from" : "loaded"} ${when}.`;
     const blocked = lib.playlists.filter(p => !p.smart && p.ids.some(id => wontSync(trackById.get(id))));
     $("libDot").className = "dot " + (blocked.length ? "warn" : "ok");
@@ -1503,7 +1446,7 @@ end exportLibrary
     // unapplied edits remain pending and there's nothing to ask about.
     restoreDrafts().finally(() => {
       saving = true; scheduleSave();
-      if (shortcutReturn && !shortcutReturn.handled && source === "apple") { shortcutReturn.handled = true; finishShortcut(shortcutReturn); }
+      if (shortcutReturn && !shortcutReturn.handled) { shortcutReturn.handled = true; finishShortcut(shortcutReturn); }
     });
   }
   $("forgetBtn").addEventListener("click", async () => {
@@ -1513,8 +1456,7 @@ end exportLibrary
       return;
     }
     saving = false; clearTimeout(saveTimer);
-    await Promise.all([store.del(K("library")), store.del(K("drafts"))]);
-    if (source === "spotify") SP.disconnect();
+    await Promise.all([store.del("library"), store.del("drafts")]);
     try { localStorage.removeItem(VIEW_KEY); } catch (e) {}
     $("search").value = ""; $("byAlbumArtist").checked = true; treeFilter = "all";
     $("ignoreSort").checked = false; $("albumOrder").value = "az";
@@ -1522,12 +1464,11 @@ end exportLibrary
     loadLibrary(sampleLibrary());
     toggleMenu($("libChip"), $("libMenu"), false);
     setWelcome(true);
-    status(source === "spotify" ? "Disconnected from Spotify; your Spotify library and edits were removed from this browser." : "Your library and edits were removed from this browser.");
+    status("Your library and edits were removed from this browser.");
     renderLoadBtn();
   });
   function readFile(file) {
     if (!file) return;
-    if (source === "spotify") { $("bannerText").textContent = "Library files are for Apple Music. Switch to Apple Music from the library menu at the top to load one."; $("banner").hidden = false; return; }
     if (!/\.xml$/i.test(file.name)) { $("bannerText").textContent = `${file.name} isn't an XML file. In Music, use File → Library → Export Library… and load the .xml it saves.`; $("banner").hidden = false; return; }
     $("bannerText").textContent = `Reading ${file.name}…`; $("banner").hidden = false;
     const r = new FileReader();
@@ -1541,9 +1482,7 @@ end exportLibrary
     r.readAsText(file);
   }
   $("loadBtn").addEventListener("click", () => {
-    if (source === "apple") $("file").click();
-    else if (!SP.connected()) SP.connect();
-    else refreshFromSpotify();
+    $("file").click();
   });
   $("file").addEventListener("change", e => { readFile(e.target.files[0]); e.target.value = ""; });
   // Show the drop overlay only while the browser keeps reporting a file drag; hide it as soon as
@@ -1560,59 +1499,12 @@ end exportLibrary
   document.addEventListener("dragend", hideDrop);
   document.addEventListener("drop", e => { e.preventDefault(); hideDrop(); readFile(e.dataTransfer.files[0]); });
 
-  // ---------- Spotify: load the library, apply changes ----------
-  let applying = false;
   function renderLoadBtn() {
-    $("loadBtn").textContent = source === "apple" ? (library.sample ? "Load library file…" : "Load a newer library file…") : SP.connected() ? "Refresh from Spotify" : "Connect Spotify";
-    $("libMenuLabel").textContent = source === "spotify" ? "Spotify" : "Apple Music";
-    $("forgetBtn").textContent = source === "spotify" ? "Disconnect Spotify" : "Forget this library";
-    if (source === "spotify" && SP.connected()) $("forgetBtn").hidden = false;
-  }
-  async function refreshFromSpotify() {
-    $("loadBtn").disabled = true; $("banner").hidden = false;
-    const say = msg => { $("bannerText").textContent = msg; };
-    SP.onWait = say;
-    try {
-      const lib = await SP.loadLibrary(say);
-      lib.loadedAt = Date.now();
-      loadLibrary(lib, `your Spotify library (${lib.account})`);
-    } catch (e) { say(e.message); }
-    $("loadBtn").disabled = false; renderLoadBtn();
+    $("loadBtn").textContent = library.sample ? "Load library file…" : "Load a newer library file…";
   }
   function saveLibrary() {
-    store.set(K("library"), { fileName: libraryName, loadedAt: library.loadedAt, tracks: library.tracks, playlists: library.playlists });
+    store.set("library", { fileName: libraryName, loadedAt: library.loadedAt, tracks: library.tracks, playlists: library.playlists });
   }
-  // Sends each changed playlist to Spotify, then makes what was sent the new starting point.
-  async function applyToSpotify() {
-    const list = drafts.filter(changed);
-    if (!list.length || applying) return;
-    applying = true; refresh();
-    SP.onWait = msg => status(msg);
-    let done = 0;
-    try {
-      for (const d of list) {
-        const name = d.name.trim() || "Untitled";
-        const addIds = orderedIds(d.orig ? new Set([...d.ids].filter(id => !d.orig.has(id))) : d.ids);
-        const removeIds = d.orig ? orderedIds(new Set([...d.orig].filter(id => !d.ids.has(id)))) : [];
-        const uri = id => trackById.get(id)?.pid;
-        const res = await SP.applyPlaylist({ id: d.orig ? d.origPid : null, name, renamed: isRenamed(d), addUris: addIds.map(uri).filter(Boolean), removeUris: removeIds.map(uri).filter(Boolean) }, msg => status(msg));
-        // Mirror the change in the cached library so the dropdown and later edits start from Spotify's new state.
-        const pl = library.playlists.find(p => p.pid === res.id);
-        if (pl) { pl.name = name; pl.ids = pl.ids.filter(id => d.ids.has(id)).concat(addIds.filter(id => !pl.ids.includes(id))); }
-        else library.playlists.push({ name, pid: res.id, ids: orderedIds(d.ids), url: res.url });
-        Object.assign(d, { orig: new Set(d.ids), origName: name, origPid: res.id, origAt: Date.now() });
-        done++;
-      }
-      status(`Applied to Spotify: ${done} playlist${done === 1 ? "" : "s"} updated.`);
-    } catch (e) {
-      $("banner").hidden = false; $("bannerText").textContent = e.message;
-      status(done ? `Applied ${done} of ${list.length} playlists before stopping.` : "Nothing was applied.");
-    }
-    // Undo snapshots predate what Spotify now has; undoing past this point could re-send old changes.
-    undoStack.length = 0; renderUndo();
-    applying = false; refresh(); saveLibrary(); saveDraftsNow();
-  }
-  $("applyBtn").addEventListener("click", applyToSpotify);
 
   // ---------- Apple Music: add songs on this device with a Shortcut ----------
   // Shortcuts can add songs to a playlist and create playlists, but not remove songs or rename, so this path sends
@@ -1700,28 +1592,14 @@ end exportLibrary
       + (m ? "" : " (The shortcut didn't report back which songs it found, so check the playlist in Music.)");
   }
 
-  store.del("spotify:matches"); store.del("spotify:sent");  // left over from the retired Copy to Spotify page
+  // Spotify support was removed; clear what it stored in this browser.
+  ["spotify:matches", "spotify:sent", "spotify:library", "spotify:drafts"].forEach(k => store.del(k));
+  try { ["crate-spotify-auth", "crate-spotify-pkce", "crate-spotify-playlists", "crate-playlist-builder:source"].forEach(k => localStorage.removeItem(k)); } catch (e) {}
   loadLibrary(library);
-  if (source === "apple") {
-    store.get("library").then(saved => {
-      if (saved && saved.tracks && library.sample) loadLibrary({ tracks: saved.tracks, playlists: saved.playlists || [], loadedAt: saved.loadedAt, sample: false }, saved.fileName, { restored: true });
-      else if (library.sample) setWelcome(true);
-    }).finally(doneBooting);
-  } else {
-    $("dropHint").textContent = "Library files are for Apple Music";
-    showSampleBanner();
-    renderLoadBtn();
-    (async () => {
-      let justConnected = false;
-      try { justConnected = await SP.finishSignIn(); } catch (e) { $("bannerText").textContent = e.message; }
-      const saved = await store.get(K("library"));
-      if (saved && saved.tracks && library.sample) loadLibrary({ tracks: saved.tracks, playlists: saved.playlists || [], loadedAt: saved.loadedAt, sample: false }, saved.fileName, { restored: true });
-      else if (library.sample) setWelcome(true);
-      doneBooting();
-      renderLoadBtn();
-      if (justConnected) refreshFromSpotify();
-    })();
-  }
+  store.get("library").then(saved => {
+    if (saved && saved.tracks && library.sample) loadLibrary({ tracks: saved.tracks, playlists: saved.playlists || [], loadedAt: saved.loadedAt, sample: false }, saved.fileName, { restored: true });
+    else if (library.sample) setWelcome(true);
+  }).finally(doneBooting);
 })();
 </script>
 </body>
