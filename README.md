@@ -6,7 +6,7 @@ Live at **https://crate.ramakocherlakota.net**
 
 ## How it works
 
-The screen is a playlist list on the left and the open playlist on the right: rename it in place, search or filter the tree (**All songs / In playlist / Changes**), and tick songs. The library chip at the top holds loading a newer library file, won't-sync warnings and forgetting the library; **View** holds grouping and sort options; **Review & apply** shows every change and the way to apply it on this device; **Help** has the instructions.
+The screen is a playlist list on the left and the open playlist on the right: rename it in place, search or filter the tree (**All songs / In playlist / Changes**), and tick songs. The library chip at the top holds loading a newer library file, won't-sync warnings and forgetting the library; **View** holds grouping and sort options; **Review & apply** shows every change and the way to apply it on this device; **Help** has the instructions. On a phone the playlist list and the playlist being edited are separate screens (with a back button), and a bar at the bottom shows the change count and Review & apply.
 
 1. In Music on a Mac: **File → Library → Export Library…** and save the XML.
 2. Load it on the page (or drag it on). Everything runs in your browser; nothing is uploaded. The library, your edits and your view (search, toggles, open folders) are remembered in this browser (IndexedDB and localStorage) until you choose **Forget this library**.

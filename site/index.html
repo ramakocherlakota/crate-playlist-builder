@@ -108,6 +108,24 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
 .muted { color: var(--muted); } .small { font-size: 13px; }
 body[data-ios] .not-ios, body:not([data-ios]) .mac-card .ios-only { display: none; }
 .banner-btns { display: inline-flex; gap: 6px; align-items: center; }
+/* Phones: two screens (playlists, then the playlist being edited) and a bottom bar for Review & apply. */
+.back-btn, .mobile-bar { display: none; }
+@media (max-width: 860px) {
+  body:not(.phone-editing) .editor { display: none; }
+  body.phone-editing aside.side { display: none; }
+  .back-btn { display: inline-flex; flex: 1 0 100%; padding: 4px 0; margin-bottom: -4px; color: var(--accent); justify-content: flex-start; }
+  .back-btn:hover { background: none; }
+  #reviewBtn { display: none; }
+  .mobile-bar { display: flex; align-items: center; gap: 10px; position: fixed; left: 0; right: 0; bottom: 0; z-index: 14; background: var(--surface); border-top: 1px solid var(--line);
+    padding: 10px max(16px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+  .mobile-bar span { flex: 1; min-width: 0; color: var(--muted); font-size: 14px; }
+  body.welcoming .mobile-bar { display: none; }
+  body { padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px)); }
+  .now { bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
+  body.has-now { padding-bottom: calc(170px + env(safe-area-inset-bottom, 0px)); }
+  .draft-pick { position: relative; padding: 11px 30px 11px 12px; }
+  .draft-pick::after { content: "›"; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 22px; }
+}
 /* Setup screen vs. the editor; nothing shows until Crate knows whether a library is saved. */
 body.booting .wrap { visibility: hidden; }
 body:not(.welcoming) #welcome { display: none; }
@@ -201,7 +219,10 @@ aside.panel select { width: 100%; }
 aside h2 { font-family: var(--font-display); font-weight: 600; font-size: 1.2rem; margin: 0; }
 .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 #undoBtn { min-width: 0; max-width: 32ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; flex: 0 1 auto; }
-@media (max-width: 600px) { #undoBtn { max-width: 9ch; } .brand span { display: none; } }
+#undoBtn { display: inline-flex; align-items: center; gap: 6px; }
+#undoLabel { overflow: hidden; text-overflow: ellipsis; }
+/* Phones: Undo shrinks to its icon (the full label stays as its tooltip and accessible name). */
+@media (max-width: 600px) { #undoLabel { display: none; } #undoBtn { font-size: 17px; padding: 5px 11px; } .brand span { display: none; } }
 .stat { display: flex; gap: 18px; }
 .stat div { display: flex; flex-direction: column; }
 .stat strong { font-family: var(--font-display); font-size: 1.6rem; font-variant-numeric: tabular-nums; line-height: 1.1; }
@@ -273,7 +294,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
       </div>
     </div>
     <span class="spacer"></span>
-    <button type="button" id="undoBtn" disabled title="Nothing to undo">Undo</button>
+    <button type="button" id="undoBtn" disabled title="Nothing to undo" aria-label="Undo"><span class="undo-icon" aria-hidden="true">↶</span><span id="undoLabel">Undo</span></button>
     <button type="button" class="ghost" id="helpBtn" aria-haspopup="dialog">Help</button>
   </div>
 </header>
@@ -307,6 +328,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
 
     <section class="panel editor" aria-label="Playlist editor">
       <div class="pl-head">
+        <button type="button" class="back-btn ghost" id="backBtn">‹ Playlists</button>
         <div class="pl-title">
           <input type="text" id="plName" value="My Picks" aria-label="Playlist name (tap to rename)" title="Rename">
           <div class="pl-sub"><span><span id="statSongs">0</span> songs</span><span><span id="statAlbums">0</span> albums</span><span id="statTime">0 min</span><span class="pill" id="plChange" hidden></span></div>
@@ -338,6 +360,12 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
       <div id="tree" role="tree" aria-label="Artists"></div>
     </section>
   </div>
+</div>
+
+<!-- Phones: the change count and Review & apply stay at the bottom of both screens. -->
+<div class="mobile-bar" id="mobileBar">
+  <span id="mobileBarText">No changes yet</span>
+  <button type="button" class="primary" id="mobileReview" aria-haspopup="dialog">Review &amp; apply</button>
 </div>
 
 <!-- Review & apply: every change, then the way to apply that fits this device and service. -->
@@ -567,6 +595,23 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
     else { toggleMenu($("libChip"), $("libMenu"), false); toggleMenu($("viewBtn"), $("viewMenu"), false); }
   });
   $("helpBtn").addEventListener("click", () => openPanel("help"));
+  $("mobileReview").addEventListener("click", () => openPanel("review"));
+
+  // Phone screens: opening a playlist moves to the editor (a history entry, so the back gesture returns).
+  const phoneQuery = matchMedia("(max-width: 860px)");
+  function showEditor() {
+    if (!phoneQuery.matches || document.body.classList.contains("phone-editing")) return;
+    document.body.classList.add("phone-editing");
+    history.pushState({ crate: "editor" }, "");
+    scrollTo(0, 0);
+  }
+  function showPlaylists() {
+    if (!document.body.classList.contains("phone-editing")) return;
+    document.body.classList.remove("phone-editing");
+    scrollTo(0, 0);
+  }
+  $("backBtn").addEventListener("click", () => { if (history.state && history.state.crate === "editor") history.back(); else showPlaylists(); });
+  addEventListener("popstate", showPlaylists);
   $("bannerClose").addEventListener("click", () => { $("banner").hidden = true; });
   $("bannerLoad").addEventListener("click", () => $("loadBtn").click());
 
@@ -885,7 +930,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
       const bad = noSyncIn(d.ids);
       if (bad.length) { const w = document.createElement("span"); w.className = "warn"; w.textContent = ` · ⚠ ${bad.length} won't sync`; w.title = "This playlist contains songs iCloud won't store, so it won't reach your other devices until they're removed or swapped. They're marked in the list on the right."; mt.appendChild(w); }
       pick.append(nm, mt);
-      pick.addEventListener("click", () => { if (i !== active) switchDraft(i); });
+      pick.addEventListener("click", () => { if (i !== active) switchDraft(i); showEditor(); });
       const close = document.createElement("button"); close.type = "button"; close.className = "draft-close";
       close.textContent = "✕"; close.setAttribute("aria-label", `Stop editing ${nm.textContent}`);
       close.addEventListener("click", () => {
@@ -913,6 +958,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
     const per = list.map(d => { const c = draftChanges(d); add += c.adds.length; rem += c.removes.length; return [d, c]; });
     const total = add + rem + list.filter(d => d.orig && isRenamed(d)).length;
     $("reviewBtn").textContent = total ? `Review & apply (${total})` : "Review & apply";
+    $("mobileBarText").textContent = total ? `${total} change${total === 1 ? "" : "s"}${list.length > 1 ? ` in ${list.length} playlists` : ""}` : "No changes yet";
     $("reviewBtn").title = total ? `+${add} −${rem}${list.length > 1 ? ` across ${list.length} playlists` : ""}` : "No changes yet";
     if ($("review").hidden) return;
     const box = $("changesList"); box.textContent = "";
@@ -979,8 +1025,9 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
   function renderUndo() {
     const top = undoStack[undoStack.length - 1];
     $("undoBtn").disabled = !top;
-    $("undoBtn").textContent = top ? `Undo ${top.label}` : "Undo";
+    $("undoLabel").textContent = top ? `Undo ${top.label}` : "Undo";
     $("undoBtn").title = top ? `Undo: ${top.label}` : "Nothing to undo";
+    $("undoBtn").setAttribute("aria-label", top ? `Undo ${top.label}` : "Undo");
   }
   $("undoBtn").addEventListener("click", undo);
   document.addEventListener("keydown", e => {
@@ -990,7 +1037,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
     e.preventDefault(); undo();
   });
 
-  function openDraft(d) { checkpoint(`open “${d.name}”`); drafts.push(d); switchDraft(drafts.length - 1); }
+  function openDraft(d) { checkpoint(`open “${d.name}”`); drafts.push(d); switchDraft(drafts.length - 1); showEditor(); }
   function closeDraft(i) {
     checkpoint(`close “${drafts[i].name.trim() || "Untitled"}”`);
     drafts.splice(i, 1);
@@ -1409,6 +1456,7 @@ end exportLibrary
     saving = false;
     undoStack.length = 0; renderUndo();  // snapshots refer to the previous library's songs
     library = lib; openArtists.clear(); openAlbums.clear();
+    showPlaylists();
     if (!lib.sample) applySavedView();
     drafts = [{ name: "My Picks", ids: new Set(), orig: null, origName: null }];
     if (lib.sample) {
@@ -1429,7 +1477,7 @@ end exportLibrary
     }
     setWelcome(false);
     const when = new Date(lib.loadedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-    $("libChipText").textContent = `Apple Music · ${lib.tracks.length.toLocaleString()} songs · ${when}`;
+    $("libChipText").textContent = `${lib.tracks.length.toLocaleString()} songs · ${when}`;
     $("libChip").title = `${fileName}: ${lib.tracks.length.toLocaleString()} songs by ${artists.length.toLocaleString()} artists, ${lib.playlists.length} playlist${lib.playlists.length === 1 ? "" : "s"}, ${opts.restored ? "remembered from" : "loaded"} ${when}.`;
     const blocked = lib.playlists.filter(p => !p.smart && p.ids.some(id => wontSync(trackById.get(id))));
     $("libDot").className = "dot " + (blocked.length ? "warn" : "ok");
