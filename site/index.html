@@ -118,7 +118,10 @@ body[data-ios] .not-ios, body:not([data-ios]) .mac-card .ios-only { display: non
   #reviewBtn { display: none; }
   .mobile-bar { display: flex; align-items: center; gap: 10px; position: fixed; left: 0; right: 0; bottom: 0; z-index: 14; background: var(--surface); border-top: 1px solid var(--line);
     padding: 10px max(16px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
-  .mobile-bar span { flex: 1; min-width: 0; color: var(--muted); font-size: 14px; }
+  #mobileBarText { flex: 1; min-width: 0; text-align: left; justify-content: flex-start; padding: 6px 0; background: none; border: 0; color: var(--accent); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
+  #mobileBarText:disabled { color: var(--muted); text-decoration: none; opacity: 1; }
+  .drawer.sheet { top: auto; left: 0; width: 100vw; max-height: 75vh; border-left: 0; border-top: 1px solid var(--line); border-radius: 16px 16px 0 0; box-shadow: 0 -12px 30px color-mix(in srgb, #000 15%, transparent); padding-top: 0; }
+  .drawer.sheet .drawer-foot .primary { flex: 1; }
   body.welcoming .mobile-bar { display: none; }
   body { padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px)); }
   .now { bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
@@ -364,8 +367,18 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
 
 <!-- Phones: the change count and Review & apply stay at the bottom of both screens. -->
 <div class="mobile-bar" id="mobileBar">
-  <span id="mobileBarText">No changes yet</span>
+  <button type="button" class="linkish" id="mobileBarText" aria-haspopup="dialog" disabled>No changes yet</button>
   <button type="button" class="primary" id="mobileReview" aria-haspopup="dialog">Review &amp; apply</button>
+</div>
+
+<!-- Phones: tapping the change count lists the changes in a sheet. -->
+<div class="drawer-wrap" id="changesPop" hidden>
+  <div class="scrim" data-close></div>
+  <section class="drawer sheet" role="dialog" aria-modal="true" aria-labelledby="changesPopTitle">
+    <div class="drawer-head"><h2 id="changesPopTitle">Changes</h2><button type="button" class="ghost" data-close aria-label="Close">✕</button></div>
+    <div class="drawer-body"><div class="changes" id="changesPopList"></div></div>
+    <div class="drawer-foot"><button type="button" class="primary" id="changesPopReview">Review &amp; apply</button></div>
+  </section>
 </div>
 
 <!-- Review & apply: every change, then the way to apply that fits this device and service. -->
@@ -434,21 +447,22 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
       </ol>
       <details class="apple-only ios-only setup" id="shortcutSetup">
         <summary>Set up the Crate shortcut (once)</summary>
-        <p><strong>Add with Shortcuts</strong> adds songs to the highlighted playlist (or creates it) right on this device, without the Mac. With Sync Library on, the change reaches your other devices. It only does the additions: any removals or a rename stay pending for the Mac script, or doing by hand in Music.</p>
+        <p><strong>Add with Shortcuts</strong> adds songs to your changed playlists (creating new ones) right on this device, without the Mac. With Sync Library on, the change reaches your other devices. It does the additions for every playlist with changes; any removals or renames stay pending for the Mac script, or doing by hand in Music.</p>
         <p><a href="shortcut-setup.html">Open the setup guide</a>: a ready-made shortcut you can import with your Mac's help, or every tap for building it yourself. Short version below.</p>
         <p>In the Shortcuts app, tap <strong>+</strong> and name the new shortcut exactly <code>Crate Add Songs</code>. Then add these actions in order (tap a blue field to pick a variable):</p>
         <ol>
-          <li><strong>Get Dictionary from Input</strong>, input: <em>Shortcut Input</em>.</li>
-          <li><strong>Get Dictionary Value</strong>: Value for <code>playlist</code> in <em>Dictionary</em>. Then <strong>Set Variable</strong> <code>Playlist Name</code> to it.</li>
-          <li><strong>Get Dictionary Value</strong>: Value for <code>create</code> in <em>Dictionary</em>.</li>
-          <li><strong>If</strong> that value <em>has any value</em>: <strong>Create Playlist</strong> named <em>Playlist Name</em>, then <strong>Wait</strong> 3 seconds (a new playlist can't be found by name straight away). <strong>End If</strong>.</li>
-          <li><strong>Get Dictionary Value</strong>: Value for <code>songs</code> in <em>Dictionary</em> (the one from step 1).</li>
+          <li><strong>Get Dictionary from Input</strong>, input: <em>Shortcut Input</em>. Then <strong>Get Dictionary Value</strong>: Value for <code>songs</code>.</li>
           <li><strong>Repeat with Each</strong> item in that value. Inside the repeat:
             <ol>
-              <li><strong>Get Dictionary Value</strong> <code>title</code> in <em>Repeat Item</em> → <strong>Set Variable</strong> <code>Title</code>. Do the same for <code>artist</code> → <code>Artist</code> and <code>album</code> → <code>Album</code>.</li>
-              <li><strong>Find Music</strong> where <em>Title</em> is <code>Title</code>, <em>Artist</em> is <code>Artist</code> and <em>Album</em> is <code>Album</code>; turn on <strong>Limit</strong> and get <strong>1</strong>.</li>
+              <li><strong>Get Dictionary Value</strong> <code>playlist</code> in <em>Repeat Item</em> → <strong>Set Variable</strong> <code>Playlist Name</code>.</li>
+              <li><strong>Get Dictionary Value</strong> <code>create</code> in <em>Repeat Item</em>. <strong>If</strong> it <em>has any value</em>: <strong>Create Playlist</strong> named <em>Playlist Name</em>, then <strong>Wait</strong> 3 seconds. <strong>End If</strong>.</li>
+              <li><strong>Get Dictionary Value</strong> <code>title</code>, <code>artist</code>, <code>album</code> in <em>Repeat Item</em> → <strong>Set Variable</strong> <code>Title</code>, <code>Artist</code>, <code>Album</code>.</li>
+              <li><strong>Find Music</strong> where <em>Title</em> is <code>Title</code>, <em>Artist</em> is <code>Artist</code> and <em>Album</em> is <code>Album</code>; <strong>Limit</strong> 1.</li>
               <li><strong>If</strong> <em>Music</em> <em>has any value</em>: <strong>Add to Playlist</strong>, adding <em>Music</em> to <em>Playlist Name</em>. <strong>Otherwise</strong>: <strong>Get Dictionary Value</strong> <code>index</code> in <em>Repeat Item</em>, then <strong>Add to Variable</strong> <code>Missing</code>. <strong>End If</strong>.</li>
             </ol>
+          </li>
+          <li>After <strong>End Repeat</strong>: <strong>Combine Text</strong> <em>Missing</em> with <strong>Custom</strong> separator <code>,</code>; <strong>Text</strong> <code>missing:</code> followed by <em>Combined Text</em>; <strong>Stop and Output</strong> that text.</li>
+        </ol>
           </li>
           <li>After <strong>End Repeat</strong>: <strong>Combine Text</strong> <em>Missing</em> with <strong>Custom</strong> separator <code>,</code>.</li>
           <li><strong>Text</strong>: <code>missing:</code> followed by <em>Combined Text</em>. Then <strong>Stop and Output</strong> that text.</li>
@@ -580,7 +594,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
   function openPanel(id) {
     lastFocus = document.activeElement;
     $(id).hidden = false; document.body.style.overflow = "hidden";
-    if (id === "review") renderChanges();
+    if (id === "review" || id === "changesPop") renderChanges();
     $(id).querySelector(".drawer-head [data-close]").focus();
   }
   function closePanel(id) {
@@ -596,6 +610,8 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
   });
   $("helpBtn").addEventListener("click", () => openPanel("help"));
   $("mobileReview").addEventListener("click", () => openPanel("review"));
+  $("mobileBarText").addEventListener("click", () => openPanel("changesPop"));
+  $("changesPopReview").addEventListener("click", () => { $("changesPop").hidden = true; $("mobileReview").focus(); openPanel("review"); });
 
   // Phone screens: opening a playlist moves to the editor (a history entry, so the back gesture returns).
   const phoneQuery = matchMedia("(max-width: 860px)");
@@ -958,10 +974,16 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
     const per = list.map(d => { const c = draftChanges(d); add += c.adds.length; rem += c.removes.length; return [d, c]; });
     const total = add + rem + list.filter(d => d.orig && isRenamed(d)).length;
     $("reviewBtn").textContent = total ? `Review & apply (${total})` : "Review & apply";
+    $("mobileBarText").disabled = !total;
     $("mobileBarText").textContent = total ? `${total} change${total === 1 ? "" : "s"}${list.length > 1 ? ` in ${list.length} playlists` : ""}` : "No changes yet";
     $("reviewBtn").title = total ? `+${add} −${rem}${list.length > 1 ? ` across ${list.length} playlists` : ""}` : "No changes yet";
-    if ($("review").hidden) return;
-    const box = $("changesList"); box.textContent = "";
+    if (!$("review").hidden) fillChanges($("changesList"), list, per);
+    if (!$("changesPop").hidden) {
+      if (!list.length) closePanel("changesPop"); else fillChanges($("changesPopList"), list, per);
+    }
+  }
+  function fillChanges(box, list, per) {
+    box.textContent = "";
     if (!list.length) { box.textContent = "Nothing to apply yet. Tick or untick songs and they'll be listed here."; return; }
     const LIMIT = 200;
     for (const [d, c] of per) {
@@ -1265,7 +1287,14 @@ end exportLibrary
   }
   // Phones and tablets can hand the file to AirDrop, Messages, Files and so on.
   try {
-    if (navigator.canShare && navigator.canShare({ files: [new File(["x"], "test.applescript", { type: "text/plain" })] })) $("shareBtn").hidden = false;
+    if (navigator.canShare && navigator.canShare({ files: [new File(["x"], "test.applescript", { type: "text/plain" })] })) {
+      $("shareBtn").hidden = false;
+      // On iPhone and iPad there's nowhere useful to paste, so sharing (AirDrop to the Mac) leads.
+      if ("ios" in document.body.dataset) {
+        $("shareBtn").classList.add("primary"); $("copyBtn").classList.remove("primary");
+        $("shareBtn").parentNode.prepend($("shareBtn"));
+      }
+    }
   } catch (e) {}
   $("shareBtn").addEventListener("click", async () => {
     try { await navigator.share({ files: [scriptFile()], title: "Playlist changes" }); status("Sent. Once it's on your Mac, double-click it and press Run. Then tap Mark as applied here."); }
@@ -1555,53 +1584,60 @@ end exportLibrary
   }
 
   // ---------- Apple Music: add songs on this device with a Shortcut ----------
-  // Shortcuts can add songs to a playlist and create playlists, but not remove songs or rename, so this path sends
-  // only a playlist's additions; removals and a rename stay pending for the Mac script or doing by hand in Music.
-  // The shortcut reports back which songs it couldn't find ("missing:0,3" by position); the rest are marked done.
+  // Shortcuts can add songs to playlists and create playlists, but not remove songs or rename, so this path sends
+  // the additions of every playlist with changes; removals and renames stay pending for the Mac script or doing by
+  // hand in Music. Crate sends one flat list of songs, each naming its playlist (the first song of a playlist that
+  // doesn't exist yet also carries "create"), so the shortcut needs only one loop. It reports back the songs it
+  // couldn't find ("missing:0,3" by position in that list); the rest are marked done.
   const SHORTCUT_NAME = "Crate Add Songs";
   const PENDING_KEY = "crate-playlist-builder:shortcut-pending";
-  function shortcutPlan(d) {
-    if (!d || library.sample) return { ok: false, why: library.sample ? "Load your library first." : "" };
-    const name = d.name.trim() || "Untitled";
-    // Until a rename is applied, Music still knows the playlist by its old name.
-    const target = d.orig ? d.origName : name;
-    const removes = d.orig ? [...d.orig].filter(id => !d.ids.has(id)).length : 0;
-    const renamed = !!d.orig && isRenamed(d);
-    const adds = orderedIds(d.orig ? new Set([...d.ids].filter(id => !d.orig.has(id))) : d.ids);
-    if (!adds.length) return { ok: false, why: removes || renamed ? "Shortcuts can only add songs. Use the Mac script for removals and renames, or do them by hand in Music." : "" };
-    return { ok: true, name, target, create: !d.orig, adds, removes, renamed };
+  function shortcutPlan() {
+    if (library.sample) return { ok: false, why: "Load your library first." };
+    const parts = [], leftover = [];
+    for (const d of drafts) {
+      if (!changed(d)) continue;
+      const name = d.name.trim() || "Untitled";
+      // Until a rename is applied, Music still knows the playlist by its old name.
+      const target = d.orig ? d.origName : name;
+      const removes = d.orig ? [...d.orig].filter(id => !d.ids.has(id)).length : 0;
+      const renamed = !!d.orig && isRenamed(d);
+      const adds = orderedIds(d.orig ? new Set([...d.ids].filter(id => !d.orig.has(id))) : d.ids);
+      if (adds.length) parts.push({ name, target, create: !d.orig, adds });
+      if (removes) leftover.push(`${removes} removal${removes === 1 ? "" : "s"} in “${name}”`);
+      if (renamed) leftover.push(`renaming “${d.origName}” to “${name}”`);
+    }
+    if (!parts.length) return { ok: false, why: leftover.length ? "Shortcuts can only add songs. Use the Mac script for removals and renames, or do them by hand in Music." : "", leftover };
+    return { ok: true, parts, leftover, total: parts.reduce((n, x) => n + x.adds.length, 0) };
   }
   function renderShortcutBtn() {
-    const plan = shortcutPlan(drafts[active]);
+    const plan = shortcutPlan();
     $("shortcutBtn").disabled = !plan.ok;
-    $("shortcutBtn").textContent = plan.ok ? `Add ${plan.adds.length} song${plan.adds.length === 1 ? "" : "s"} with Shortcuts` : "Add with Shortcuts";
-    const leftover = [];
-    if (plan.removes) leftover.push(`${plan.removes} removal${plan.removes === 1 ? "" : "s"}`);
-    if (plan.renamed) leftover.push(`the rename to “${plan.name}”`);
+    $("shortcutBtn").textContent = !plan.ok ? "Add with Shortcuts"
+      : `Add ${plan.total} song${plan.total === 1 ? "" : "s"}${plan.parts.length > 1 ? ` to ${plan.parts.length} playlists` : ""} with Shortcuts`;
+    const where = plan.ok ? plan.parts.map(x => `${x.adds.length} to “${x.target}”${x.create ? " (new)" : ""}`).join(", ") : "";
     $("shortcutHint").textContent = (!plan.ok ? (plan.why ? plan.why + " " : "")
-      : `Runs the “${SHORTCUT_NAME}” shortcut${plan.create ? `, which creates “${plan.target}”` : ""}.`
-        + (leftover.length ? ` Shortcuts can only add, so ${leftover.join(" and ")} will stay pending for the Mac script or doing by hand in Music.` : "") + " ");
+      : `Adds ${where}.` + (plan.leftover.length ? ` Shortcuts can only add, so ${plan.leftover.join(" and ")} will stay pending for the Mac script or doing by hand in Music.` : "") + " ");
     const link = document.createElement("a");
     link.href = "shortcut-setup.html"; link.textContent = "How to set up the shortcut";
     $("shortcutHint").appendChild(link);
   }
   $("shortcutBtn").addEventListener("click", async () => {
-    const plan = shortcutPlan(drafts[active]);
+    const plan = shortcutPlan();
     if (!plan.ok) return;
     const token = Math.random().toString(36).slice(2, 10);
-    const pids = plan.adds.map(id => trackById.get(id)?.pid);
-    try { localStorage.setItem(PENDING_KEY, JSON.stringify({ token, name: plan.name, target: plan.target, create: plan.create, pids, at: Date.now() })); } catch (e) {}
-    // "create" is present only when the playlist must be made: the shortcut tests it with "has any value",
-    // because Shortcuts won't compare a dictionary value as text.
-    const payload = {
-      playlist: plan.target,
-      ...(plan.create ? { create: "yes" } : {}),
-      songs: plan.adds.map((id, i) => { const t = trackById.get(id); return { index: String(i), title: t.name, artist: t.artist, album: t.album }; }),
-    };
+    const songs = [], sent = [];
+    for (const x of plan.parts) x.adds.forEach((id, i) => {
+      const t = trackById.get(id);
+      // "create" is present only when the playlist must be made: the shortcut tests it with "has any value",
+      // because Shortcuts won't compare a dictionary value as text.
+      songs.push({ index: String(songs.length), playlist: x.target, ...(x.create && i === 0 ? { create: "yes" } : {}), title: t.name, artist: t.artist, album: t.album });
+      sent.push({ name: x.name, target: x.target, create: x.create, pid: t.pid });
+    });
+    try { localStorage.setItem(PENDING_KEY, JSON.stringify({ token, sent, at: Date.now() })); } catch (e) {}
     await saveDraftsNow();  // the page reloads when Shortcuts sends you back, so save the edits first
     const back = `${location.origin}${location.pathname}?crate_shortcut=${token}&outcome=`;
     const enc = encodeURIComponent;  // Shortcuts doesn't read "+" as a space, so avoid URLSearchParams here
-    location.href = `shortcuts://x-callback-url/run-shortcut?name=${enc(SHORTCUT_NAME)}&input=text&text=${enc(JSON.stringify(payload))}`
+    location.href = `shortcuts://x-callback-url/run-shortcut?name=${enc(SHORTCUT_NAME)}&input=text&text=${enc(JSON.stringify({ songs }))}`
       + `&x-success=${enc(back + "ok")}&x-cancel=${enc(back + "cancel")}&x-error=${enc(back + "error")}`;
   });
   // Shortcuts returns here with ?crate_shortcut=<token>&outcome=ok|cancel|error and, on success, result=<output>.
@@ -1614,30 +1650,37 @@ end exportLibrary
   function finishShortcut(ret) {
     let pending = null;
     try { pending = JSON.parse(localStorage.getItem(PENDING_KEY) || "null"); localStorage.removeItem(PENDING_KEY); } catch (e) {}
-    if (!pending || pending.token !== ret.token) return;
+    if (!pending || pending.token !== ret.token || !pending.sent) return;
     $("banner").hidden = false;
     if (ret.outcome !== "ok") {
-      $("bannerText").textContent = ret.outcome === "cancel" ? "The shortcut was cancelled, so nothing was marked as added." : `The “${SHORTCUT_NAME}” shortcut reported an error, so nothing was marked as added. Check it's set up as described under “Set up the Crate shortcut”.`;
+      $("bannerText").textContent = ret.outcome === "cancel" ? "The shortcut was cancelled, so nothing was marked as added." : `The “${SHORTCUT_NAME}” shortcut reported an error, so nothing was marked as added. Check it's set up as described under “Set up the Crate shortcut” in Help.`;
       return;
     }
     const m = /missing:([\d,\s]*)/.exec(ret.result || "");
     const missing = new Set(m ? m[1].split(",").map(x => x.trim()).filter(Boolean).map(Number) : []);
     const idOf = new Map(library.tracks.map(t => [t.pid, t.id]));
-    const doneIds = pending.pids.filter((pid, i) => !missing.has(i)).map(pid => idOf.get(pid)).filter(Boolean);
-    const missingNames = [...missing].map(i => trackById.get(idOf.get(pending.pids[i]))?.name).filter(Boolean);
-    const d = drafts.find(x => (x.name.trim() || "Untitled") === pending.name);
-    if (d) {
-      // What the shortcut added becomes part of the starting point; anything it couldn't find stays pending.
-      d.orig = new Set([...(d.orig || []), ...doneIds]);
-      if (pending.create) { d.origName = pending.target || pending.name; d.origPid = ""; }
+    const added = new Map(), missingNames = [];  // playlist name -> {target, create, ids}
+    pending.sent.forEach((x, i) => {
+      const id = idOf.get(x.pid); if (!id) return;
+      if (missing.has(i)) { const t = trackById.get(id); if (t) missingNames.push(t.name); return; }
+      if (!added.has(x.name)) added.set(x.name, { target: x.target, create: x.create, ids: [] });
+      added.get(x.name).ids.push(id);
+    });
+    // What the shortcut added becomes part of each playlist's starting point; anything not found stays pending.
+    for (const [name, x] of added) {
+      const d = drafts.find(dd => (dd.name.trim() || "Untitled") === name); if (!d) continue;
+      d.orig = new Set([...(d.orig || []), ...x.ids]);
+      if (x.create) { d.origName = x.target; d.origPid = ""; }
       d.origAt = Date.now();
-      refresh(); saveDraftsNow();
     }
-    const left = d ? [...(d.orig || [])].filter(id => !d.ids.has(id)).length : 0;
-    $("bannerText").textContent = `Shortcuts added ${doneIds.length} song${doneIds.length === 1 ? "" : "s"} to “${pending.target || pending.name}”.`
-      + (left ? ` ${left} removal${left === 1 ? " is" : "s are"} still pending: run the Mac script, or remove ${left === 1 ? "it" : "them"} by hand in Music.` : "")
+    refresh(); saveDraftsNow();
+    const total = [...added.values()].reduce((n, x) => n + x.ids.length, 0);
+    const left = shortcutPlan().leftover || [];
+    $("bannerText").textContent = `Shortcuts added ${total} song${total === 1 ? "" : "s"}`
+      + ([...added.values()].length ? ` (${[...added.values()].map(x => `${x.ids.length} to “${x.target}”`).join(", ")})` : "") + "."
       + (missingNames.length ? ` It couldn't find ${missingNames.map(n => `“${n}”`).join(", ")}; ${missingNames.length === 1 ? "that one stays" : "those stay"} pending.` : "")
-      + (m ? "" : " (The shortcut didn't report back which songs it found, so check the playlist in Music.)");
+      + (left.length ? ` Still pending for the Mac script or doing by hand in Music: ${left.join(", ")}.` : "")
+      + (m ? "" : " (The shortcut didn't report back which songs it found, so check the playlists in Music.)");
   }
 
   // Spotify support was removed; clear what it stored in this browser.

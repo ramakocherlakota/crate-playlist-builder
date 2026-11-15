@@ -5,9 +5,9 @@ Apple only imports signed shortcuts, so sign the output on a Mac:
     shortcuts sign --mode anyone --input crate-add-songs-unsigned.shortcut --output "Crate Add Songs.shortcut"
 The imported shortcut takes its name from the signed file's name.
 
-It mirrors the steps in site/shortcut-setup.html: read Crate's JSON (playlist, songs[title, artist, album,
-index], and "create" only when the playlist must be made), create the playlist if asked, add each song found by Find Music, and output
-"missing:<indexes>" for the songs it couldn't find.
+It mirrors the steps in site/shortcut-setup.html: read Crate's JSON, a flat list of songs (index, playlist,
+title, artist, album, and "create" on the first song of a playlist that must be made), and for each song create
+its playlist if asked, find it with Find Music and add it, then output "missing:<indexes>" for songs not found.
 """
 import plistlib
 import sys
@@ -65,10 +65,14 @@ IS, HAS_ANY_VALUE = 4, 100  # Shortcuts' condition codes (IS is used by Find Mus
 dict_id = new_id()
 add("is.workflow.actions.detect.dictionary", UUID=dict_id, WFInput=SHORTCUT_INPUT)
 dictionary = output_of(dict_id, "Dictionary")
-set_variable("Playlist Name", get_value("playlist", dictionary))
+songs = get_value("songs", dictionary)
 
-# Part 2: create the playlist if Crate asks
-create = get_value("create", dictionary)
+# Part 2: for each song, make its playlist if asked, then find the song and add it
+loop = new_id()
+add("is.workflow.actions.repeat.each", GroupingIdentifier=loop, WFControlFlowMode=0, WFInput=songs)
+item = named("Repeat Item")
+set_variable("Playlist Name", get_value("playlist", item))
+create = get_value("create", item)
 g = new_id()
 if_start(g, create, HAS_ANY_VALUE)
 add("is.workflow.actions.createplaylist", UUID=new_id(), WFPlaylistName=text("", named("Playlist Name")))
@@ -76,12 +80,6 @@ add("is.workflow.actions.createplaylist", UUID=new_id(), WFPlaylistName=text("",
 add("is.workflow.actions.delay", WFDelayTime=3)
 if_otherwise(g)
 if_end(g)
-
-# Part 3: go through the songs
-songs = get_value("songs", dictionary)
-loop = new_id()
-add("is.workflow.actions.repeat.each", GroupingIdentifier=loop, WFControlFlowMode=0, WFInput=songs)
-item = named("Repeat Item")
 set_variable("Title", get_value("title", item))
 set_variable("Artist", get_value("artist", item))
 set_variable("Album", get_value("album", item))
