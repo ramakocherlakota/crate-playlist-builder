@@ -6,30 +6,107 @@ Live at **https://crate.ramakocherlakota.net**
 
 ## How it works
 
-The screen is a playlist list on the left and the open playlist on the right: rename it in place, search or filter the tree (**All songs / In playlist / Changes**), and tick songs. The library chip at the top holds loading a newer library file, won't-sync warnings and forgetting the library; **View** holds grouping and sort options; **Review & apply** shows every change and the way to apply it on this device; **Help** has the instructions. On a phone the playlist list and the playlist being edited are separate screens (with a back button), and a bar at the bottom shows the change count (tap it to list the changes) and Review & apply.
+The screen is a playlist list on the left and the open playlist on the right: rename it in place, search or filter the tree (**All songs / In playlist / Changes**), and tick songs. Along the top:
+
+- the **library chip** (song count and date) opens a menu for loading a newer library file, won't-sync warnings and forgetting the library;
+- **Undo** reverses the last change;
+- **Help** has the instructions, including setting up the shortcut.
+
+Above the tree, **View** holds grouping (by album artist), album order (A–Z or by year), ignoring sort names, and expand/collapse all. Menus keep themselves on screen on narrow phones. **Review & apply** (enabled once something has changed) shows every change and the ways to apply it on this device.
+
+On a phone the playlist list and the playlist being edited are separate screens (with a back button), and a bar at the bottom shows the change count and Review & apply. Tapping the count opens a sheet listing the changes, each with Undo.
 
 1. In Music on a Mac: **File → Library → Export Library…** and save the XML.
-2. Load it on the page (or drag it on). Everything runs in your browser; nothing is uploaded. The library, your edits and your view (search, toggles, open folders) are remembered in this browser (IndexedDB and localStorage) until you choose **Forget this library**.
+2. Load it on the page (or drag it on). Everything runs in your browser; nothing is uploaded. The library, your edits and your view settings are remembered in this browser (IndexedDB and localStorage) until you choose **Forget this library**.
 3. Tick artists, albums or songs. Open any number of existing playlists (or start new ones) and switch between them; each keeps its own changes. Press ♪ next to a song to hear Apple's 30-second preview (looked up through the public iTunes Search API).
-4. Copy, download or share (AirDrop from a phone, where Share is the main button) the generated AppleScript and run it in Script Editor on your Mac. One script covers every playlist you changed. It finds each song by its persistent ID, so it works for streaming Apple Music songs as well as local files.
+4. Apply the changes, either:
+   - on the Mac, with a generated AppleScript run in Script Editor. Copy or download it, or on an iPhone/iPad use **Share script** (the main button there) to AirDrop it to the Mac. One script covers every playlist you changed. It finds each song by its persistent ID, so it works for streaming Apple Music songs as well as local files.
+   - on the phone, with **Add with Shortcuts** (additions only; see below).
 
-### Keeping the phone in sync
-
-With **Afterwards, save an updated Library.xml to iCloud Drive › Crate** ticked (the default), each script finishes by writing the library (songs and playlists) to `iCloud Drive/Crate/Library.xml` in the same format as Music's own export, since Music has no scriptable Export Library. Load that file in Crate on the phone: what the script applied shows as done, and edits not yet run stay pending.
-
-The playlists themselves reach the phone's Music app through **Sync Library** (Apple Music or iTunes Match) automatically, or, without a subscription, by syncing the iPhone with the Mac in Finder (by cable, or over Wi-Fi once **Show this iPhone when on Wi-Fi** is ticked).
-
-The export also records each song's iCloud status. Crate marks songs iCloud won't store (duplicate, ineligible and so on) with **won't sync**, and warns in the library menu, the playlist list and Review & apply when a playlist contains one, because such a playlist won't reach your other devices.
-
-### Adding songs from the phone with Shortcuts
-
-**Add with Shortcuts** runs a one-time-built shortcut, `Crate Add Songs`, on the device itself, covering every playlist with additions in one run: it finds each song by title, artist and album and adds it to its playlist (creating new playlists as needed), then returns to Crate with its version and any songs it couldn't find, which stay pending. If the shortcut's version is older than Crate expects (or it stops with an error), Crate links to the setup guide to reinstall it; bump `VERSION` in `tools/make_shortcut.py` and `SHORTCUT_VERSION` in `site/index.html` together when the shortcut changes. With Sync Library on, iCloud carries the change to the Mac. Shortcuts can't remove songs or rename playlists, so only the additions are sent (to the playlist's current name in Music); removals and a rename stay pending for the Mac script or doing by hand in Music. The easiest install is an iCloud share link (a snapshot, so each new version needs a fresh link in `site/index.html` and `site/shortcut-setup.html`). Setup steps are in the app under **Set up the Crate shortcut**, with a detailed walkthrough at [`site/shortcut-setup.html`](site/shortcut-setup.html) (https://crate.ramakocherlakota.net/shortcut-setup.html). The guide also offers a ready-made `site/crate-add-songs-unsigned.shortcut`, generated by [`tools/make_shortcut.py`](tools/make_shortcut.py); sign it on a Mac with `shortcuts sign --mode anyone --input crate-add-songs-unsigned.shortcut --output "Crate Add Songs.shortcut"` and double-click the result to import it.
+To use Crate like an app on the phone, use Safari's Share → **Add to Home Screen**: the page supplies the icon and the name "Crate". It deliberately doesn't run as a full-screen web app, because that would have its own storage, separate from Safari's, and the return from Shortcuts always opens in Safari.
 
 ### Changes, not rewrites
 
-The script applies only what you changed: unticked songs are removed, newly ticked songs are added at the end (existing order is kept), and a renamed playlist is renamed in Music. Anything already done is skipped, so scripts made on different devices can be run in any order, and running one twice is harmless. Only one Crate tab is live at a time: when another Crate tab is used (returning from Shortcuts opens a new Safari tab), the older one stops saving and offers **Use this tab**, so tabs can't overwrite each other's edits. **Undo** (or ⌘Z) reverses the last change: ticks, renames, closing a playlist or Mark as applied. Loading a newer library keeps your unapplied edits on top of any changes made elsewhere. **Review & apply** lists exactly which songs each playlist will gain or lose (with a per-song Undo), and the tree's **Changes** filter highlights them in place. After exporting a script, **Mark as applied** resets the change counts so the next script only carries newer edits.
+The script applies only what you changed:
 
-The app is [`site/index.html`](site/index.html), plus the Shortcuts setup guide ([`site/shortcut-setup.html`](site/shortcut-setup.html)).
+- unticked songs are removed;
+- newly ticked songs are added at the end, keeping the existing order;
+- a renamed playlist is renamed in Music.
+
+Anything already done is skipped, so scripts made on different devices can be run in any order, and running one twice is harmless.
+
+- **Undo** (or ⌘Z) reverses the last change: ticks, renames, closing a playlist or Mark as applied.
+- Loading a newer library keeps your unapplied edits on top of any changes made elsewhere.
+- **Review & apply** lists exactly which songs each playlist will gain or lose, with a per-song Undo.
+- The tree's **Changes** filter highlights those songs in place.
+- After exporting a script, **Mark as applied** resets the change counts, so the next script only carries newer edits.
+
+### One live tab
+
+Only one Crate tab is live at a time. Returning from Shortcuts opens a new Safari tab: iOS gives no way to reuse the old one, and a page can't close tabs it didn't open. Two tabs editing at once would also overwrite each other's saved edits.
+
+So each tab announces itself over a `BroadcastChannel` when it's opened or used. Any other Crate tab then:
+
+1. saves its pending edit;
+2. stops saving;
+3. shows **Crate continued in another tab**, with a **Use this tab** button that reloads it with the latest edits.
+
+### Keeping the phone in sync
+
+With **Afterwards, save an updated Library.xml to iCloud Drive › Crate** ticked (the default), each script finishes by writing the library (songs and playlists) to `iCloud Drive/Crate/Library.xml`. It uses the same format as Music's own export, since Music has no scriptable Export Library. Load that file in Crate on the phone: what the script applied shows as done, and edits not yet run stay pending.
+
+The playlists themselves reach the phone's Music app:
+
+- automatically, through **Sync Library** (Apple Music or iTunes Match);
+- or, without a subscription, by syncing the iPhone with the Mac in Finder (by cable, or over Wi-Fi once **Show this iPhone when on Wi-Fi** is ticked).
+
+The export also records each song's iCloud status. Crate marks songs iCloud won't store (duplicate, ineligible and so on) with **won't sync**. It warns in the library menu, the playlist list and Review & apply when a playlist contains one, because such a playlist won't reach your other devices.
+
+### Adding songs from the phone with Shortcuts
+
+**Add with Shortcuts** runs a shortcut you install once, `Crate Add Songs`, on the device itself. One run covers every playlist with additions. With Sync Library on, iCloud carries the changes to the Mac.
+
+Shortcuts can't remove songs or rename playlists, so only additions are sent, using the playlist's current name in Music. Removals and renames stay pending for the Mac script, or for doing by hand in Music. The button is disabled when there's nothing to add.
+
+**What Crate sends:** JSON with:
+
+- `v`, the version Crate needs;
+- `need_v2` … `need_vN` markers for that version;
+- a flat `songs` list. Each song has `index`, `playlist`, `title`, `artist` and `album`, plus `create` on the first song of a playlist that doesn't exist yet.
+
+**What the shortcut (version 4) does:**
+
+1. Stops before adding anything if `need_v5` is present, reporting `v4 outdated`. This is a presence test because Shortcuts won't compare dictionary values.
+2. For each song:
+   1. Creates the playlist if asked, then waits 3 seconds, since a brand-new playlist can't be found by name straight away.
+   2. Finds the song with Find Music, by exact title, artist and album.
+   3. If that fails, looks at every song with that title and takes one whose artist and album match ignoring capitals. The phone can capitalise an album differently from the Mac's export, and requiring both keeps it from picking a live or other version.
+   4. Adds the song to its playlist.
+3. Returns `v4 missing:<indexes>` to Crate through the x-callback URL.
+
+**Back in Crate:** the found songs are marked as added, and the ones not found stay pending. The message shows the artist and album Crate searched for. If the shortcut reports an older version, stops itself as outdated, or stops with an error, Crate links to the current version.
+
+**Installing:**
+
+- **iCloud link:** the easiest install, linked from the app's Help and the guide. The link is a snapshot of one version.
+- **Setup guide:** a walkthrough at [`site/shortcut-setup.html`](site/shortcut-setup.html) (https://crate.ramakocherlakota.net/shortcut-setup.html), with steps for building the shortcut by hand. A short version is in the app's Help.
+- **Signed file:** a ready-made `site/crate-add-songs-unsigned.shortcut`, generated by [`tools/make_shortcut.py`](tools/make_shortcut.py). Sign it on a Mac with `shortcuts sign --mode anyone --input crate-add-songs-unsigned.shortcut --output "Crate Add Songs.shortcut"` and double-click the result to import it.
+
+**Releasing a new shortcut version:**
+
+1. Bump `VERSION` in `tools/make_shortcut.py` and `SHORTCUT_VERSION` in `site/index.html` together.
+2. Regenerate the file: `cd site && python3 ../tools/make_shortcut.py`.
+3. Update the version text in the guide's steps and the app's Help.
+4. Install, test and share the new version from Shortcuts. Put its new iCloud link in `SHORTCUT_INSTALL_URL` and the Help in `site/index.html`, and in `site/shortcut-setup.html`.
+
+## Files
+
+- [`site/index.html`](site/index.html): the whole app (HTML, CSS and JavaScript in one file).
+- [`site/shortcut-setup.html`](site/shortcut-setup.html): the Shortcuts setup guide.
+- `site/crate-add-songs-unsigned.shortcut`: the generated, unsigned shortcut.
+- `site/icon.svg`, `site/apple-touch-icon.png`: the icons.
+- [`tools/make_shortcut.py`](tools/make_shortcut.py): builds the shortcut file.
+- [`infra/site.yml`](infra/site.yml) and [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml): hosting and deployment (below).
 
 ## Hosting
 
