@@ -71,7 +71,8 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--hover)
   <p class="lede">How to get the <strong>Crate Add Songs</strong> shortcut onto your iPhone or iPad. You only do this once. Afterwards, Crate's <strong>Add with Shortcuts</strong> button adds songs to your playlists right on the phone, without the Mac.</p>
 
   <section aria-labelledby="h-icloud">
-    <h2 id="h-icloud">Easiest: install it from iCloud (version 3)</h2>
+    <h2 id="h-icloud">Easiest: install it from iCloud</h2>
+    <p class="note">The iCloud link still has version 3. Until it's updated, use the file below to get version 4.</p>
     <ol class="steps">
       <li><span class="n">1</span><div>If you have an older <strong>Crate Add Songs</strong>, delete it first (press and hold it in Shortcuts → <strong>Delete</strong>), so the new one keeps the exact name Crate uses.</div></li>
       <li><span class="n">2</span><div>On your iPhone or iPad, tap:<br><a class="dl" href="https://www.icloud.com/shortcuts/2b90e724f54b4d96b809c7e7c676a3fa">Get Crate Add Songs</a><br>Shortcuts opens and shows the shortcut. Tap <strong>Add Shortcut</strong>.</div></li>
@@ -94,9 +95,9 @@ shortcuts sign --mode anyone --input crate-add-songs-unsigned.shortcut --output 
           <li>If Shortcuts syncs through iCloud (on the iPhone: Settings → Apps → Shortcuts → <strong>iCloud Sync</strong>), it appears on your phone within a minute or so.</li>
           <li>Otherwise, AirDrop the signed file to your iPhone and tap <strong>Add Shortcut</strong> there.</li>
         </ul></div></li>
-      <li><span class="n">4</span><div>Open it in Shortcuts and compare it with the steps below, especially the two <strong>If</strong> actions (steps 8 and 12), the conditions in both <strong>Find Music</strong> actions (steps 11 and 12), the <strong>If … is Key</strong> in step 12 and the playlist in <strong>Add to Playlist</strong> (step 13). If an action has a blank that didn't come through, fill it in as the steps describe.</div></li>
+      <li><span class="n">4</span><div>Open it in Shortcuts and compare it with the steps below, especially the version check (step 4), the <strong>If</strong> actions (steps 8, 12 and 13), the conditions in both <strong>Find Music</strong> actions (steps 11 and 12), the <strong>If … is Key</strong> in step 12 and the playlist in <strong>Add to Playlist</strong> (step 13). If an action has a blank that didn't come through, fill it in as the steps describe.</div></li>
     </ol>
-    <p class="note"><strong>Updating?</strong> This is version 3 of the shortcut. When Crate says yours is out of date, delete the old <strong>Crate Add Songs</strong> on every device, and any old copies of the file in Downloads, then install this one (or use the iCloud link above).</p>
+    <p class="note"><strong>Updating?</strong> This is version 4 of the shortcut. When Crate says yours is out of date, delete the old <strong>Crate Add Songs</strong> on every device, and any old copies of the file in Downloads, then install this one (or use the iCloud link above).</p>
     <p class="note">This file was written by hand from Shortcuts' file format and hasn't been tested on a device yet. If signing reports an error, or parts are missing after importing, note the details.</p>
   </section>
   <p class="or">or build it yourself:</p>
@@ -127,7 +128,7 @@ shortcuts sign --mode anyone --input crate-add-songs-unsigned.shortcut --output 
     <ol class="steps" start="3">
       <li><span class="n">3</span><div>Add <span class="act">Get Dictionary from Input</span>. Tap the blue <span class="blank">Input</span> → choose <strong>Shortcut Input</strong>.
         <p class="check">A line saying "Receive <strong>Any</strong> input from <strong>Nowhere</strong>" may appear at the top. Leave it as it is.</p></div></li>
-      <li><span class="n">4</span><div>Add <span class="act">Get Dictionary Value</span>. It reads "Get <span class="blank">Value</span> for <span class="blank">Key</span> in <span class="blank">Dictionary</span>". Tap <span class="blank">Key</span> → type <code>songs</code>.</div></li>
+      <li><span class="n">4</span><div>Version check: add <span class="act">Get Dictionary Value</span>. It reads "Get <span class="blank">Value</span> for <span class="blank">Key</span> in <span class="blank">Dictionary</span>". Tap <span class="blank">Key</span> → type <code>need_v5</code>. Then <span class="act">If</span> <strong>Dictionary Value</strong> <strong>has any value</strong>; between If and Otherwise add <span class="act">Text</span> <code>v4 outdated</code> and <span class="act">Stop and Output</span> (input: <strong>Text</strong>). This makes the shortcut stop before adding anything when Crate needs a newer version.<br>After <strong>End If</strong>, add another <span class="act">Get Dictionary Value</span>: <span class="blank">Key</span> → <code>songs</code>, <span class="blank">Dictionary</span> → <strong>Dictionary</strong> (from step 3).</div></li>
       <li><span class="n">5</span><div>Add <span class="act">Repeat with Each</span>. It should say "Repeat with each item in <strong>Dictionary Value</strong>", and comes with <strong>End Repeat</strong>.</div></li>
     </ol>
     <p class="drag">Steps 6–13 all go <strong>inside the Repeat</strong>: after adding each action, drag it up above <strong>End Repeat</strong>, keeping this order.</p>
@@ -180,7 +181,7 @@ shortcuts sign --mode anyone --input crate-add-songs-unsigned.shortcut --output 
     <p>These go <strong>after End Repeat</strong>, at the bottom.</p>
     <ol class="steps" start="14">
       <li><span class="n">14</span><div><span class="act">Combine Text</span>: tap its input → pick the variable <strong>Missing</strong>. Tap <span class="blank">New Lines</span> → <strong>Custom</strong> → type a comma <code>,</code></div></li>
-      <li><span class="n">15</span><div><span class="act">Text</span>: in its box, type <code>v3 missing:</code> (with a space after <code>v3</code>) and then, right after the colon with no space, tap <strong>Combined Text</strong> in the variable bar.</div></li>
+      <li><span class="n">15</span><div><span class="act">Text</span>: in its box, type <code>v4 missing:</code> (with a space after <code>v4</code>) and then, right after the colon with no space, tap <strong>Combined Text</strong> in the variable bar.</div></li>
       <li><span class="n">16</span><div><span class="act">Stop and Output</span>: its input should be <strong>Text</strong>. If it asks what to do when there's nowhere to output, leave it on <strong>Do Nothing</strong>.</div></li>
     </ol>
     <p>Tap <strong>Done</strong> to save.</p>
@@ -200,7 +201,7 @@ shortcuts sign --mode anyone --input crate-add-songs-unsigned.shortcut --output 
     <ul>
       <li><strong>The variable won't go in at step 9 or step 13:</strong> if the <span class="blank">Playlist</span> blank won't accept a variable, note what it offers instead.</li>
       <li><strong>Songs come back "not found"</strong> even though they're in your library: try removing the <strong>Album</strong> filter in step 11.</li>
-      <li><strong>Shortcuts shows an error:</strong> first make sure you have the current version (step 15's text should start <code>v3</code>), then note which step it highlights, if any.</li>
+      <li><strong>Shortcuts shows an error:</strong> first make sure you have the current version (step 15's text should start <code>v4</code>), then note which step it highlights, if any.</li>
     </ul>
   </section>
 </div>

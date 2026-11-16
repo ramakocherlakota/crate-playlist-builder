@@ -16,7 +16,7 @@ import plistlib
 import sys
 import uuid
 
-VERSION = 3
+VERSION = 4
 
 def new_id():
     return str(uuid.uuid4()).upper()
@@ -93,6 +93,15 @@ def detail(prop, source):
 dict_id = new_id()
 add("is.workflow.actions.detect.dictionary", UUID=dict_id, WFInput=SHORTCUT_INPUT)
 dictionary = output_of(dict_id, "Dictionary")
+# Stop before adding anything if Crate needs a newer shortcut: Crate sends "need_v2" … "need_vN" for the version
+# N it needs, so this copy is too old exactly when "need_v<VERSION+1>" is present.
+too_old = new_id()
+if_start(too_old, get_value(f"need_v{VERSION + 1}", dictionary), HAS_ANY_VALUE)
+stop_id = new_id()
+add("is.workflow.actions.gettext", UUID=stop_id, WFTextActionText=text(f"v{VERSION} outdated"))
+add("is.workflow.actions.output", WFOutput=text("", output_of(stop_id, "Text")), WFNoOutputSurfaceBehavior="Do Nothing")
+if_otherwise(too_old)
+if_end(too_old)
 songs = get_value("songs", dictionary)
 
 # Part 2: for each song, make its playlist if asked, then find the song and add it

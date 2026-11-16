@@ -394,7 +394,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
 
       <div class="card apple-only ios-only hl">
         <h3>On this iPhone</h3>
-        <div class="btns"><button type="button" class="primary" id="shortcutBtn" disabled>Add with Shortcuts</button></div>
+        <div class="btns"><button type="button" class="primary" id="shortcutBtn" disabled>Add with Shortcuts</button><button type="button" id="shortcutUpdated" hidden>I've updated it</button></div>
         <p class="hint" id="shortcutHint"></p>
       </div>
 
@@ -450,10 +450,10 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
       <details class="apple-only ios-only setup" id="shortcutSetup">
         <summary>Set up the Crate shortcut (once)</summary>
         <p><strong>Add with Shortcuts</strong> adds songs to your changed playlists (creating new ones) right on this device, without the Mac. With Sync Library on, the change reaches your other devices. It does the additions for every playlist with changes; any removals or renames stay pending for the Mac script, or doing by hand in Music.</p>
-        <p><a href="https://www.icloud.com/shortcuts/2b90e724f54b4d96b809c7e7c676a3fa"><strong>Get the shortcut from iCloud</strong></a> and tap <strong>Add Shortcut</strong> (delete any older Crate Add Songs first). Or <a href="shortcut-setup.html">open the setup guide</a> to import the file with your Mac, or build it yourself; the short version is below.</p>
+        <p><a href="shortcut-setup.html">Open the setup guide</a> to install the shortcut (from iCloud, or by importing the file with your Mac), or to build it yourself; the short version is below.</p>
         <p>In the Shortcuts app, tap <strong>+</strong> and name the new shortcut exactly <code>Crate Add Songs</code>. Then add these actions in order (tap a blue field to pick a variable):</p>
         <ol>
-          <li><strong>Get Dictionary from Input</strong>, input: <em>Shortcut Input</em>. Then <strong>Get Dictionary Value</strong>: Value for <code>songs</code>.</li>
+          <li><strong>Get Dictionary from Input</strong>, input: <em>Shortcut Input</em>. Version check: <strong>Get Dictionary Value</strong> <code>need_v5</code>; <strong>If</strong> it <em>has any value</em>: <strong>Text</strong> <code>v4 outdated</code>, <strong>Stop and Output</strong> it. <strong>End If</strong>. Then <strong>Get Dictionary Value</strong>: Value for <code>songs</code> in <em>Dictionary</em>.</li>
           <li><strong>Repeat with Each</strong> item in that value. Inside the repeat:
             <ol>
               <li><strong>Get Dictionary Value</strong> <code>playlist</code> in <em>Repeat Item</em> → <strong>Set Variable</strong> <code>Playlist Name</code>.</li>
@@ -464,7 +464,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
               <li><strong>If</strong> <em>Song</em> <em>has any value</em>: <strong>Add to Playlist</strong>, adding <em>Song</em> to <em>Playlist Name</em>. <strong>Otherwise</strong>: <strong>Get Dictionary Value</strong> <code>index</code> in <em>Repeat Item</em>, then <strong>Add to Variable</strong> <code>Missing</code>. <strong>End If</strong>.</li>
             </ol>
           </li>
-          <li>After <strong>End Repeat</strong>: <strong>Combine Text</strong> <em>Missing</em> with <strong>Custom</strong> separator <code>,</code>; <strong>Text</strong> <code>v3 missing:</code> followed by <em>Combined Text</em>; <strong>Stop and Output</strong> that text. (The <code>v3</code> tells Crate which version you have, so it can say when there's a newer one.)</li>
+          <li>After <strong>End Repeat</strong>: <strong>Combine Text</strong> <em>Missing</em> with <strong>Custom</strong> separator <code>,</code>; <strong>Text</strong> <code>v4 missing:</code> followed by <em>Combined Text</em>; <strong>Stop and Output</strong> that text. (The <code>v4</code> tells Crate which version you have, so it can say when there's a newer one.)</li>
         </ol>
         <p>Songs are matched by title, artist and album, so the first run is worth checking in Music. If Shortcuts asks for permission to use your music library, allow it.</p>
       </details>
@@ -1604,15 +1604,23 @@ end exportLibrary
   // the additions of every playlist with changes; removals and renames stay pending for the Mac script or doing by
   // hand in Music. Crate sends one flat list of songs, each naming its playlist (the first song of a playlist that
   // doesn't exist yet also carries "create"), so the shortcut needs only one loop. It reports back the songs it
-  // couldn't find ("v3 missing:0,3", by position in that list); the rest are marked done.
-  // The "v3" is the shortcut's version. Bump SHORTCUT_VERSION with VERSION in tools/make_shortcut.py when the shortcut
+  // couldn't find ("v4 missing:0,3", by position in that list); the rest are marked done.
+  // The "v4" is the shortcut's version. Bump SHORTCUT_VERSION with VERSION in tools/make_shortcut.py when the shortcut
   // changes in a way Crate depends on; older copies (and those from before versions, which send none) are then
   // asked to reinstall from SHORTCUT_INSTALL_URL.
   const SHORTCUT_NAME = "Crate Add Songs";
-  const SHORTCUT_VERSION = 3;
+  const SHORTCUT_VERSION = 4;
+  // Version 4 on also stops before adding anything when Crate needs a newer one: Crate sends "need_v2" … "need_vN"
+  // for the version N it needs, and a version-K shortcut stops if "need_v<K+1>" is present (a presence test,
+  // since Shortcuts won't compare dictionary values). Older copies can't do that, so Crate also remembers the
+  // version the last run reported and won't run one it knows is out of date.
+  const VERSION_KEY = "crate-playlist-builder:shortcut-version";
+  const knownVersion = () => { try { const v = localStorage.getItem(VERSION_KEY); return v == null ? null : Number(v); } catch (e) { return null; } };
+  const rememberVersion = v => { try { v == null ? localStorage.removeItem(VERSION_KEY) : localStorage.setItem(VERSION_KEY, String(v)); } catch (e) {} };
+  const knownOutdated = () => { const v = knownVersion(); return v != null && v < SHORTCUT_VERSION; };
   // An iCloud share link is a snapshot: share the new version from Shortcuts and replace this link (and the one in
   // shortcut-setup.html) on each release.
-  const SHORTCUT_INSTALL_URL = "https://www.icloud.com/shortcuts/2b90e724f54b4d96b809c7e7c676a3fa";  // version 3
+  const SHORTCUT_INSTALL_URL = "shortcut-setup.html#h-quick";  // back to an iCloud link once it has version 4
   const PENDING_KEY = "crate-playlist-builder:shortcut-pending";
   function shortcutPlan() {
     if (library.sample) return { ok: false, why: "Load your library first." };
@@ -1634,6 +1642,13 @@ end exportLibrary
   }
   function renderShortcutBtn() {
     const plan = shortcutPlan();
+    $("shortcutUpdated").hidden = !knownOutdated();
+    if (knownOutdated()) {
+      $("shortcutBtn").disabled = false;
+      $("shortcutBtn").textContent = `Get version ${SHORTCUT_VERSION} of the shortcut`;
+      $("shortcutHint").textContent = `Your “${SHORTCUT_NAME}” shortcut is version ${knownVersion() || 1}, which is out of date, so Crate won't run it. Install version ${SHORTCUT_VERSION} (delete the old one first), then tap “I've updated it”.`;
+      return;
+    }
     $("shortcutBtn").disabled = !plan.ok;
     $("shortcutBtn").textContent = !plan.ok ? "Add with Shortcuts"
       : `Add ${plan.total} song${plan.total === 1 ? "" : "s"}${plan.parts.length > 1 ? ` to ${plan.parts.length} playlists` : ""} with Shortcuts`;
@@ -1644,7 +1659,9 @@ end exportLibrary
     link.href = "shortcut-setup.html"; link.textContent = "How to set up the shortcut";
     $("shortcutHint").appendChild(link);
   }
+  $("shortcutUpdated").addEventListener("click", () => { rememberVersion(null); renderShortcutBtn(); });
   $("shortcutBtn").addEventListener("click", async () => {
+    if (knownOutdated()) { location.href = SHORTCUT_INSTALL_URL; return; }
     const plan = shortcutPlan();
     if (!plan.ok) return;
     const token = Math.random().toString(36).slice(2, 10);
@@ -1660,9 +1677,14 @@ end exportLibrary
     await saveDraftsNow();  // the page reloads when Shortcuts sends you back, so save the edits first
     const back = `${location.origin}${location.pathname}?crate_shortcut=${token}&outcome=`;
     const enc = encodeURIComponent;  // Shortcuts doesn't read "+" as a space, so avoid URLSearchParams here
-    location.href = `shortcuts://x-callback-url/run-shortcut?name=${enc(SHORTCUT_NAME)}&input=text&text=${enc(JSON.stringify({ v: SHORTCUT_VERSION, songs }))}`
+    location.href = `shortcuts://x-callback-url/run-shortcut?name=${enc(SHORTCUT_NAME)}&input=text&text=${enc(JSON.stringify({ v: SHORTCUT_VERSION, ...needKeys(), songs }))}`
       + `&x-success=${enc(back + "ok")}&x-cancel=${enc(back + "cancel")}&x-error=${enc(back + "error")}`;
   });
+  function needKeys() {
+    const o = {};
+    for (let k = 2; k <= SHORTCUT_VERSION; k++) o[`need_v${k}`] = "yes";
+    return o;
+  }
   // Shortcuts returns here with ?crate_shortcut=<token>&outcome=ok|cancel|error and, on success, result=<output>.
   const shortcutReturn = (() => {
     const q = new URLSearchParams(location.search);
@@ -1684,6 +1706,12 @@ end exportLibrary
     }
     const v = /\bv(\d+)\b/.exec(ret.result || "");
     const outdated = !v || Number(v[1]) < SHORTCUT_VERSION;
+    rememberVersion(v ? Number(v[1]) : 1);
+    if (/\boutdated\b/.test(ret.result || "")) {  // the shortcut saw it was too old and stopped before adding
+      $("bannerText").textContent = `Nothing was added: your “${SHORTCUT_NAME}” shortcut is version ${v ? v[1] : "?"} and Crate needs version ${SHORTCUT_VERSION}. `;
+      $("bannerText").append(updateLink(`Get version ${SHORTCUT_VERSION}`), " (delete the old one first), then try again.");
+      refresh(); return;
+    }
     const m = /missing:([\d,\s]*)/.exec(ret.result || "");
     const missing = new Set(m ? m[1].split(",").map(x => x.trim()).filter(Boolean).map(Number) : []);
     const idOf = new Map(library.tracks.map(t => [t.pid, t.id]));
