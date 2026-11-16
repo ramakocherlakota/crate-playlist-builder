@@ -94,6 +94,11 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
 .track.added .delta { color: var(--add); } .track.removed .delta { color: var(--remove); }
 /* Side panels (Review & apply, Help). */
 .drawer-wrap { position: fixed; inset: 0; z-index: 30; }
+.stale-tab { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 24px; background: color-mix(in srgb, var(--bg) 80%, transparent); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+.stale-tab[hidden] { display: none; }
+.stale-card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px; max-width: 380px; box-shadow: 0 10px 30px color-mix(in srgb, #000 15%, transparent); display: flex; flex-direction: column; gap: 12px; }
+.stale-card h2 { font-family: var(--font-display); font-size: 1.25rem; margin: 0; }
+.stale-card p { margin: 0; color: var(--muted); font-size: 14.5px; }
 .scrim { position: absolute; inset: 0; background: color-mix(in srgb, #0b0d14 45%, transparent); }
 .drawer { position: absolute; top: 0; right: 0; bottom: 0; width: min(480px, 100vw); background: var(--surface); border-left: 1px solid var(--line); display: flex; flex-direction: column; box-shadow: -12px 0 30px color-mix(in srgb, #000 15%, transparent); padding-top: env(safe-area-inset-top, 0px); }
 .drawer.wide { width: min(720px, 100vw); }
@@ -371,6 +376,15 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
 <div class="mobile-bar" id="mobileBar">
   <button type="button" class="linkish" id="mobileBarText" aria-haspopup="dialog" disabled>No changes yet</button>
   <button type="button" class="primary" id="mobileReview" aria-haspopup="dialog">Review &amp; apply</button>
+</div>
+
+<!-- Shown in a Crate tab once another Crate tab has been used, so two tabs can't overwrite each other's edits. -->
+<div class="stale-tab" id="staleTab" hidden role="alertdialog" aria-modal="true" aria-labelledby="staleTitle">
+  <div class="stale-card">
+    <h2 id="staleTitle">Crate continued in another tab</h2>
+    <p>Your edits are saved there. You can close this tab, or carry on here instead (this tab then picks up the latest edits).</p>
+    <div class="btns"><button type="button" class="primary" id="staleUse">Use this tab</button></div>
+  </div>
 </div>
 
 <!-- Phones: tapping the change count lists the changes in a sheet. -->
@@ -1406,15 +1420,16 @@ end exportLibrary
     };
   })();
   let saving = false;  // off until the saved edits for the current library have been restored
+  let staleTab = false;  // another Crate tab has been used since; this one stops saving
   let saveTimer;
   function scheduleSave() {
-    if (!saving || library.sample) return;
+    if (!saving || staleTab || library.sample) return;
     clearTimeout(saveTimer);
     saveTimer = setTimeout(saveDraftsNow, 300);
   }
   function saveDraftsNow() {
     clearTimeout(saveTimer); saveTimer = null;
-    if (!saving || library.sample) return Promise.resolve();
+    if (!saving || staleTab || library.sample) return Promise.resolve();
     const pidOf = id => trackById.get(id)?.pid;
     return store.set("drafts", {
       active,
@@ -1427,6 +1442,26 @@ end exportLibrary
   }
   // A reload or closed tab inside the 300ms window shouldn't lose the last change.
   addEventListener("pagehide", () => { if (saveTimer) saveDraftsNow(); });
+  // One Crate tab at a time. Coming back from Shortcuts opens a new Safari tab (iOS gives no way to reuse the old
+  // one, and a page can't close tabs it didn't open), and two tabs editing at once would overwrite each other's
+  // saved edits. So a tab announces itself when it's used, and any other Crate tab steps aside until asked back.
+  const tabId = Math.random().toString(36).slice(2);
+  const tabs = "BroadcastChannel" in window ? new BroadcastChannel("crate-tabs") : null;
+  const announceTab = () => { if (tabs && !staleTab) tabs.postMessage({ active: tabId }); };
+  if (tabs) tabs.onmessage = e => {
+    if (!e.data || !e.data.active || e.data.active === tabId || staleTab) return;
+    if (saveTimer) saveDraftsNow();
+    staleTab = true;
+    for (const el of document.body.children) if (el.id !== "staleTab") el.inert = true;
+    $("staleTab").hidden = false; $("staleUse").focus();
+  };
+  $("staleUse").addEventListener("click", () => location.reload());
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") announceTab();
+    else if (saveTimer) saveDraftsNow();
+  });
+  addEventListener("focus", announceTab);
+  announceTab();
   // Saved edits are keyed by persistent ID, so they carry over to a newer export of the library.
   async function restoreDrafts() {
     const saved = await store.get("drafts");
