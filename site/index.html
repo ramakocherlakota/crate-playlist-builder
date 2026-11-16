@@ -66,7 +66,7 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
 .menu.right { left: auto; right: 0; }
 .menu .mi { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; border: 0; background: none; padding: 8px 10px; border-radius: 6px; font-size: 14px; cursor: pointer; color: var(--fg); }
 .menu .mi:hover { background: var(--hover); }
-.menu .mi input[type="checkbox"] { accent-color: var(--accent); }
+.menu .mi input[type="checkbox"], .menu .mi input[type="radio"] { accent-color: var(--accent); }
 .menu .mi select { padding: 3px 6px; font-size: 13.5px; margin-left: auto; }
 .menu .lbl { padding: 6px 10px 2px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 .menu .sep { height: 1px; background: var(--line); margin: 4px 0; }
@@ -352,7 +352,8 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
             <div class="lbl">Group</div>
             <label class="mi"><input type="checkbox" id="byAlbumArtist" checked> By album artist</label>
             <div class="lbl">Albums</div>
-            <label class="mi">Order <select id="albumOrder" aria-label="Album order"><option value="az">A–Z</option><option value="year">By year</option></select></label>
+            <label class="mi"><input type="radio" name="albumOrder" id="orderAz" value="az" checked> A–Z</label>
+            <label class="mi"><input type="radio" name="albumOrder" id="orderYear" value="year"> By year</label>
             <label class="mi"><input type="checkbox" id="ignoreSort"> Ignore sort names</label>
             <div class="sep"></div>
             <button type="button" class="mi" id="expandAll">Expand all</button>
@@ -649,7 +650,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
   }
   function buildTree() {
     const byAA = $("byAlbumArtist").checked;
-    const byYear = $("albumOrder").value === "year";
+    const byYear = $("orderYear").checked;
     trackById = new Map(library.tracks.map(t => [t.id, t]));
     const map = new Map();
     for (const t of library.tracks) {
@@ -1334,7 +1335,7 @@ end exportLibrary
   $("reviewBtn").addEventListener("click", () => openPanel("review"));
   $("byAlbumArtist").addEventListener("change", () => { openArtists.clear(); openAlbums.clear(); buildTree(); render(); });
   $("ignoreSort").addEventListener("change", () => { buildTree(); render(); });
-  $("albumOrder").addEventListener("change", () => { buildTree(); render(); });
+  ["orderAz", "orderYear"].forEach(id => $(id).addEventListener("change", () => { buildTree(); render(); }));
   $("expandAll").addEventListener("click", () => {
     for (const a of artists) { openArtists.add(a.name); if (artists.length <= 60) for (const al of a.albums) openAlbums.add(a.name + "\u0000" + al.name); }
     render();
@@ -1456,7 +1457,7 @@ end exportLibrary
     try {
       localStorage.setItem(VIEW_KEY, JSON.stringify({
         search: $("search").value, byAlbumArtist: $("byAlbumArtist").checked, treeFilter,
-        ignoreSort: $("ignoreSort").checked, albumOrder: $("albumOrder").value,
+        ignoreSort: $("ignoreSort").checked, albumOrder: $("orderYear").checked ? "year" : "az",
         openArtists: [...openArtists], openAlbums: [...openAlbums],
       }));
     } catch (e) {}
@@ -1470,7 +1471,7 @@ end exportLibrary
     treeFilter = ["all", "in", "changes"].includes(v.treeFilter) ? v.treeFilter : v.onlyChecked ? "in" : "all";
     document.querySelectorAll(".seg button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.filter === treeFilter)));
     $("ignoreSort").checked = !!v.ignoreSort;
-    $("albumOrder").value = v.albumOrder === "year" ? "year" : "az";
+    $(v.albumOrder === "year" ? "orderYear" : "orderAz").checked = true;
     (v.openArtists || []).forEach(n => openArtists.add(n));
     (v.openAlbums || []).forEach(k => openAlbums.add(k));
   }
@@ -1532,7 +1533,7 @@ end exportLibrary
     await Promise.all([store.del("library"), store.del("drafts")]);
     try { localStorage.removeItem(VIEW_KEY); } catch (e) {}
     $("search").value = ""; $("byAlbumArtist").checked = true; treeFilter = "all";
-    $("ignoreSort").checked = false; $("albumOrder").value = "az";
+    $("ignoreSort").checked = false; $("orderAz").checked = true;
     delete $("forgetBtn").dataset.confirm; $("forgetBtn").textContent = "Forget this library";
     loadLibrary(sampleLibrary());
     toggleMenu($("libChip"), $("libMenu"), false);
@@ -1670,7 +1671,7 @@ end exportLibrary
     const added = new Map(), missingNames = [];  // playlist name -> {target, create, ids}
     pending.sent.forEach((x, i) => {
       const id = idOf.get(x.pid); if (!id) return;
-      if (missing.has(i)) { const t = trackById.get(id); if (t) missingNames.push(t.name); return; }
+      if (missing.has(i)) { const t = trackById.get(id); if (t) missingNames.push(`“${t.name}” (artist “${t.artist}”, album “${t.album}”)`); return; }
       if (!added.has(x.name)) added.set(x.name, { target: x.target, create: x.create, ids: [] });
       added.get(x.name).ids.push(id);
     });
@@ -1686,7 +1687,7 @@ end exportLibrary
     const left = shortcutPlan().leftover || [];
     $("bannerText").textContent = `Shortcuts added ${total} song${total === 1 ? "" : "s"}`
       + ([...added.values()].length ? ` (${[...added.values()].map(x => `${x.ids.length} to “${x.target}”`).join(", ")})` : "") + "."
-      + (missingNames.length ? ` It couldn't find ${missingNames.map(n => `“${n}”`).join(", ")}; ${missingNames.length === 1 ? "that one stays" : "those stay"} pending.` : "")
+      + (missingNames.length ? ` It couldn't find ${missingNames.join(", ")} in this device's Music library; ${missingNames.length === 1 ? "that one stays" : "those stay"} pending.` : "")
       + (left.length ? ` Still pending for the Mac script or doing by hand in Music: ${left.join(", ")}.` : "")
       + (m ? "" : " (The shortcut didn't report back which songs it found, so check the playlists in Music.)");
     if (outdated) $("bannerText").append(" Your “" + SHORTCUT_NAME + "” shortcut is out of date: ", updateLink(`get version ${SHORTCUT_VERSION}`), " (delete the old one first).");
