@@ -450,7 +450,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
       <details class="apple-only ios-only setup" id="shortcutSetup">
         <summary>Set up the Crate shortcut (once)</summary>
         <p><strong>Add with Shortcuts</strong> adds songs to your changed playlists (creating new ones) right on this device, without the Mac. With Sync Library on, the change reaches your other devices. It does the additions for every playlist with changes; any removals or renames stay pending for the Mac script, or doing by hand in Music.</p>
-        <p><a href="https://www.icloud.com/shortcuts/a8967f8f95804cb5aa334c61a6522f19"><strong>Get the shortcut from iCloud</strong></a> and tap <strong>Add Shortcut</strong> (delete any older Crate Add Songs first). Or <a href="shortcut-setup.html">open the setup guide</a> to import the file with your Mac, or build it yourself; the short version is below.</p>
+        <p><a href="shortcut-setup.html">Open the setup guide</a> to install the shortcut (from iCloud, or by importing the file with your Mac), or to build it yourself; the short version is below.</p>
         <p>In the Shortcuts app, tap <strong>+</strong> and name the new shortcut exactly <code>Crate Add Songs</code>. Then add these actions in order (tap a blue field to pick a variable):</p>
         <ol>
           <li><strong>Get Dictionary from Input</strong>, input: <em>Shortcut Input</em>. Then <strong>Get Dictionary Value</strong>: Value for <code>songs</code>.</li>
@@ -459,11 +459,12 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
               <li><strong>Get Dictionary Value</strong> <code>playlist</code> in <em>Repeat Item</em> → <strong>Set Variable</strong> <code>Playlist Name</code>.</li>
               <li><strong>Get Dictionary Value</strong> <code>create</code> in <em>Repeat Item</em>. <strong>If</strong> it <em>has any value</em>: <strong>Create Playlist</strong> named <em>Playlist Name</em>, then <strong>Wait</strong> 3 seconds. <strong>End If</strong>.</li>
               <li><strong>Get Dictionary Value</strong> <code>title</code>, <code>artist</code>, <code>album</code> in <em>Repeat Item</em> → <strong>Set Variable</strong> <code>Title</code>, <code>Artist</code>, <code>Album</code>.</li>
-              <li><strong>Find Music</strong> where <em>Title</em> is <code>Title</code>, <em>Artist</em> is <code>Artist</code> and <em>Album</em> is <code>Album</code>; <strong>Limit</strong> 1.</li>
-              <li><strong>If</strong> <em>Music</em> <em>has any value</em>: <strong>Add to Playlist</strong>, adding <em>Music</em> to <em>Playlist Name</em>. <strong>Otherwise</strong>: <strong>Get Dictionary Value</strong> <code>index</code> in <em>Repeat Item</em>, then <strong>Add to Variable</strong> <code>Missing</code>. <strong>End If</strong>.</li>
+              <li><strong>Find Music</strong> where <em>Title</em> is <code>Title</code>, <em>Artist</em> is <code>Artist</code> and <em>Album</em> is <code>Album</code>; <strong>Limit</strong> 1 → <strong>Set Variable</strong> <code>Song</code>.</li>
+              <li><strong>If</strong> <em>Song</em> <em>does not have any value</em> (a second try ignoring capitals): <strong>Text</strong> <em>Artist</em>|<em>Album</em> → <strong>Change Case</strong> lowercase → <strong>Set Variable</strong> <code>Key</code>; <strong>Find Music</strong> where <em>Title</em> is <code>Title</code>; <strong>Repeat with Each</strong>: <strong>Get Details of Music</strong> Artist and Album of <em>Repeat Item 2</em>, <strong>Text</strong> Artist|Album, <strong>Change Case</strong> lowercase, <strong>If</strong> it <em>is</em> <code>Key</code>: <strong>Set Variable</strong> <code>Song</code> to <em>Repeat Item 2</em>. <strong>End Repeat</strong>. <strong>End If</strong>.</li>
+              <li><strong>If</strong> <em>Song</em> <em>has any value</em>: <strong>Add to Playlist</strong>, adding <em>Song</em> to <em>Playlist Name</em>. <strong>Otherwise</strong>: <strong>Get Dictionary Value</strong> <code>index</code> in <em>Repeat Item</em>, then <strong>Add to Variable</strong> <code>Missing</code>. <strong>End If</strong>.</li>
             </ol>
           </li>
-          <li>After <strong>End Repeat</strong>: <strong>Combine Text</strong> <em>Missing</em> with <strong>Custom</strong> separator <code>,</code>; <strong>Text</strong> <code>v2 missing:</code> followed by <em>Combined Text</em>; <strong>Stop and Output</strong> that text. (The <code>v2</code> tells Crate which version you have, so it can say when there's a newer one.)</li>
+          <li>After <strong>End Repeat</strong>: <strong>Combine Text</strong> <em>Missing</em> with <strong>Custom</strong> separator <code>,</code>; <strong>Text</strong> <code>v3 missing:</code> followed by <em>Combined Text</em>; <strong>Stop and Output</strong> that text. (The <code>v3</code> tells Crate which version you have, so it can say when there's a newer one.)</li>
         </ol>
         <p>Songs are matched by title, artist and album, so the first run is worth checking in Music. If Shortcuts asks for permission to use your music library, allow it.</p>
       </details>
@@ -1603,15 +1604,15 @@ end exportLibrary
   // the additions of every playlist with changes; removals and renames stay pending for the Mac script or doing by
   // hand in Music. Crate sends one flat list of songs, each naming its playlist (the first song of a playlist that
   // doesn't exist yet also carries "create"), so the shortcut needs only one loop. It reports back the songs it
-  // couldn't find ("v2 missing:0,3", by position in that list); the rest are marked done.
-  // The "v2" is the shortcut's version. Bump SHORTCUT_VERSION with VERSION in tools/make_shortcut.py when the shortcut
+  // couldn't find ("v3 missing:0,3", by position in that list); the rest are marked done.
+  // The "v3" is the shortcut's version. Bump SHORTCUT_VERSION with VERSION in tools/make_shortcut.py when the shortcut
   // changes in a way Crate depends on; older copies (and those from before versions, which send none) are then
   // asked to reinstall from SHORTCUT_INSTALL_URL.
   const SHORTCUT_NAME = "Crate Add Songs";
-  const SHORTCUT_VERSION = 2;
+  const SHORTCUT_VERSION = 3;
   // An iCloud share link is a snapshot: share the new version from Shortcuts and replace this link (and the one in
   // shortcut-setup.html) on each release.
-  const SHORTCUT_INSTALL_URL = "https://www.icloud.com/shortcuts/a8967f8f95804cb5aa334c61a6522f19";
+  const SHORTCUT_INSTALL_URL = "shortcut-setup.html#h-quick";  // back to the iCloud link once it has version 3
   const PENDING_KEY = "crate-playlist-builder:shortcut-pending";
   function shortcutPlan() {
     if (library.sample) return { ok: false, why: "Load your library first." };

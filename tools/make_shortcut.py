@@ -16,7 +16,7 @@ import plistlib
 import sys
 import uuid
 
-VERSION = 2
+VERSION = 3
 
 def new_id():
     return str(uuid.uuid4()).upper()
@@ -39,6 +39,17 @@ def text(before, ref=None, after=""):
                       "attachmentsByRange": {"{%d, 1}" % len(before): ref["Value"]}},
             "WFSerializationType": "WFTextTokenString"}
 
+def text_parts(*parts):
+    """A text field mixing literal strings and variables, e.g. text_parts(ref1, "|", ref2)."""
+    string, attachments = "", {}
+    for part in parts:
+        if isinstance(part, str):
+            string += part
+        else:
+            attachments["{%d, 1}" % len(string)] = part["Value"]
+            string += "￼"
+    return {"Value": {"string": string, "attachmentsByRange": attachments}, "WFSerializationType": "WFTextTokenString"}
+
 actions = []
 def add(identifier, **params):
     actions.append({"WFWorkflowActionIdentifier": identifier, "WFWorkflowActionParameters": params})
@@ -52,11 +63,13 @@ def get_value(key, source):
 def set_variable(name, value):
     add("is.workflow.actions.setvariable", WFVariableName=name, WFInput=value)
 
-def if_start(group, subject, condition):
-    # Only presence tests are used: Shortcuts won't offer "is" for an untyped dictionary value, so a text
-    # comparison imports with its text blank. Crate omits "create" unless the playlist must be made.
+def if_start(group, subject, condition, compare_to=None):
+    # Dictionary values are only tested for presence: Shortcuts won't offer "is" for an untyped dictionary value,
+    # so a text comparison imports with its text blank. Crate omits "create" unless the playlist must be made.
+    # "is" is used only on the output of Change Case, which is plain text.
+    extra = {"WFConditionalActionString": compare_to} if compare_to else {}
     add("is.workflow.actions.conditional", GroupingIdentifier=group, WFControlFlowMode=0, WFCondition=condition,
-        WFInput={"Type": "Variable", "Variable": subject})
+        WFInput={"Type": "Variable", "Variable": subject}, **extra)
 
 def if_otherwise(group):
     add("is.workflow.actions.conditional", GroupingIdentifier=group, WFControlFlowMode=1)
@@ -64,7 +77,17 @@ def if_otherwise(group):
 def if_end(group):
     add("is.workflow.actions.conditional", GroupingIdentifier=group, WFControlFlowMode=2, UUID=new_id())
 
-IS, HAS_ANY_VALUE = 4, 100  # Shortcuts' condition codes (IS is used by Find Music's filters)
+IS, HAS_ANY_VALUE, HAS_NO_VALUE = 4, 100, 101  # Shortcuts' condition codes
+
+def lowercase(value):
+    u = new_id()
+    add("is.workflow.actions.text.changecase", UUID=u, WFCaseType="lowercase", text=value)
+    return output_of(u, "Updated Text")
+
+def detail(prop, source):
+    u = new_id()
+    add("is.workflow.actions.properties.music", UUID=u, WFContentItemPropertyName=prop, WFInput=source)
+    return output_of(u, prop)
 
 # Part 1: read what Crate sends
 dict_id = new_id()
@@ -92,19 +115,42 @@ set_variable("Album", get_value("album", item))
 def music_filter(prop, var):
     return {"Operator": IS, "Property": prop, "Removable": True,
             "Values": {"String": text("", named(var)), "Unit": 4}}
-find_id = new_id()
-add("is.workflow.actions.filter.music", UUID=find_id,
-    WFContentItemFilter={"Value": {"WFActionParameterFilterPrefix": 1, "WFContentPredicateBoundedDate": False,
-                                   "WFActionParameterFilterTemplates": [music_filter("Title", "Title"),
-                                                                        music_filter("Artist", "Artist"),
-                                                                        music_filter("Album", "Album")]},
-                         "WFSerializationType": "WFContentPredicateTableTemplate"},
-    WFContentItemLimitEnabled=True, WFContentItemLimitNumber=1)
-music = output_of(find_id, "Music")
+def find_music(filters, limit=None):
+    u = new_id()
+    add("is.workflow.actions.filter.music", UUID=u,
+        WFContentItemFilter={"Value": {"WFActionParameterFilterPrefix": 1, "WFContentPredicateBoundedDate": False,
+                                       "WFActionParameterFilterTemplates": filters},
+                             "WFSerializationType": "WFContentPredicateTableTemplate"},
+        **({"WFContentItemLimitEnabled": True, "WFContentItemLimitNumber": limit} if limit else {}))
+    return output_of(u, "Music")
+
+# Exact match first.
+set_variable("Song", find_music([music_filter("Title", "Title"), music_filter("Artist", "Artist"),
+                                 music_filter("Album", "Album")], limit=1))
+# Find Music's "is" minds capitals, and the phone can show an album or artist capitalised differently from the
+# Mac's export ("The Lion the Beast the Beat" vs "The Lion The Beast The Beat"). So if nothing matched, look at
+# every song with this title and take one whose artist and album match apart from capitals. Requiring both keeps
+# it from picking a live or other version of the song.
+retry = new_id()
+if_start(retry, named("Song"), HAS_NO_VALUE)
+set_variable("Key", lowercase(text_parts(named("Artist"), "|", named("Album"))))
+candidates = find_music([music_filter("Title", "Title")])
+inner = new_id()
+add("is.workflow.actions.repeat.each", GroupingIdentifier=inner, WFControlFlowMode=0, WFInput=candidates)
+cand = named("Repeat Item 2")
+cand_key = lowercase(text_parts(detail("Artist", cand), "|", detail("Album", cand)))
+same = new_id()
+if_start(same, cand_key, IS, compare_to=text_parts(named("Key")))
+set_variable("Song", cand)
+if_otherwise(same)
+if_end(same)
+add("is.workflow.actions.repeat.each", GroupingIdentifier=inner, WFControlFlowMode=2, UUID=new_id())
+if_otherwise(retry)
+if_end(retry)
 
 found = new_id()
-if_start(found, music, HAS_ANY_VALUE)
-add("is.workflow.actions.addtoplaylist", WFInput=music, WFPlaylistName=text("", named("Playlist Name")))
+if_start(found, named("Song"), HAS_ANY_VALUE)
+add("is.workflow.actions.addtoplaylist", WFInput=named("Song"), WFPlaylistName=text("", named("Playlist Name")))
 if_otherwise(found)
 add("is.workflow.actions.appendvariable", WFVariableName="Missing", WFInput=get_value("index", item))
 if_end(found)

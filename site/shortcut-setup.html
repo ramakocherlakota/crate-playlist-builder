@@ -71,7 +71,8 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--hover)
   <p class="lede">How to get the <strong>Crate Add Songs</strong> shortcut onto your iPhone or iPad. You only do this once. Afterwards, Crate's <strong>Add with Shortcuts</strong> button adds songs to your playlists right on the phone, without the Mac.</p>
 
   <section aria-labelledby="h-icloud">
-    <h2 id="h-icloud">Easiest: install it from iCloud (version 2)</h2>
+    <h2 id="h-icloud">Easiest: install it from iCloud</h2>
+    <p class="note">The iCloud link still has version 2. Until it's updated, use the file below to get version 3, which also finds songs whose album or artist is capitalised differently on the phone.</p>
     <ol class="steps">
       <li><span class="n">1</span><div>If you have an older <strong>Crate Add Songs</strong>, delete it first (press and hold it in Shortcuts → <strong>Delete</strong>), so the new one keeps the exact name Crate uses.</div></li>
       <li><span class="n">2</span><div>On your iPhone or iPad, tap:<br><a class="dl" href="https://www.icloud.com/shortcuts/a8967f8f95804cb5aa334c61a6522f19">Get Crate Add Songs</a><br>Shortcuts opens and shows the shortcut. Tap <strong>Add Shortcut</strong>.</div></li>
@@ -94,9 +95,9 @@ shortcuts sign --mode anyone --input crate-add-songs-unsigned.shortcut --output 
           <li>If Shortcuts syncs through iCloud (on the iPhone: Settings → Apps → Shortcuts → <strong>iCloud Sync</strong>), it appears on your phone within a minute or so.</li>
           <li>Otherwise, AirDrop the signed file to your iPhone and tap <strong>Add Shortcut</strong> there.</li>
         </ul></div></li>
-      <li><span class="n">4</span><div>Open it in Shortcuts and compare it with the steps below, especially the two <strong>If</strong> actions (steps 8 and 12), the three conditions in <strong>Find Music</strong> (step 11) and the playlist in <strong>Add to Playlist</strong> (step 13). If an action has a blank that didn't come through, fill it in as the steps describe.</div></li>
+      <li><span class="n">4</span><div>Open it in Shortcuts and compare it with the steps below, especially the two <strong>If</strong> actions (steps 8 and 12), the conditions in both <strong>Find Music</strong> actions (steps 11 and 12), the <strong>If … is Key</strong> in step 12 and the playlist in <strong>Add to Playlist</strong> (step 13). If an action has a blank that didn't come through, fill it in as the steps describe.</div></li>
     </ol>
-    <p class="note"><strong>Updating?</strong> This is version 2 of the shortcut. When Crate says yours is out of date, delete the old <strong>Crate Add Songs</strong> on every device, and any old copies of the file in Downloads, then install this one (or use the iCloud link above).</p>
+    <p class="note"><strong>Updating?</strong> This is version 3 of the shortcut. When Crate says yours is out of date, delete the old <strong>Crate Add Songs</strong> on every device, and any old copies of the file in Downloads, then install this one (or use the iCloud link above).</p>
     <p class="note">This file was written by hand from Shortcuts' file format and hasn't been tested on a device yet. If signing reports an error, or parts are missing after importing, note the details.</p>
   </section>
   <p class="or">or build it yourself:</p>
@@ -153,11 +154,23 @@ shortcuts sign --mode anyone --input crate-add-songs-unsigned.shortcut --output 
           <li><strong>Add Filter</strong> → <strong>Artist</strong> <strong>is</strong> → <strong>Artist</strong>.</li>
           <li><strong>Add Filter</strong> → <strong>Album</strong> <strong>is</strong> → <strong>Album</strong>.</li>
           <li>Turn on <strong>Limit</strong> and set it to <strong>Get 1 Song</strong>.</li>
-        </ul></div></li>
-      <li><span class="n">12</span><div><span class="act">If</span>: the first blank should be <strong>Music</strong> (Find Music's result). <span class="blank">Condition</span> → <strong>has any value</strong>.</div></li>
-      <li><span class="n">13</span><div>Fill in that If block:
+        </ul>
+        Then <span class="act">Set Variable</span> → name it <code>Song</code> (its input is <strong>Music</strong>).</div></li>
+      <li><span class="n">12</span><div>A second try that ignores capitals, because the phone can show an album or artist capitalised differently from your Mac ("The Lion the Beast the Beat" vs "The Lion The Beast The Beat") and Find Music's <strong>is</strong> counts that as different. Add <span class="act">If</span>: <strong>Song</strong> <strong>does not have any value</strong>. Between If and Otherwise:
         <ul>
-          <li><strong>Between If and Otherwise:</strong> add <span class="act">Add to Playlist</span>. It reads "Add <strong>Music</strong> to <span class="blank">Playlist</span>". Tap <span class="blank">Playlist</span> → pick the variable <strong>Playlist Name</strong>.</li>
+          <li><span class="act">Text</span>: tap <strong>Artist</strong> in the variable bar, type <code>|</code>, tap <strong>Album</strong>. Then <span class="act">Change Case</span> → <strong>lowercase</strong>, and <span class="act">Set Variable</span> <code>Key</code>.</li>
+          <li><span class="act">Find Music</span> with one filter, <strong>Title</strong> <strong>is</strong> <strong>Title</strong>, and no limit.</li>
+          <li><span class="act">Repeat with Each</span> item in <strong>Music</strong>. Inside it:
+            <ul>
+              <li><span class="act">Get Details of Music</span>: <strong>Artist</strong> of <strong>Repeat Item 2</strong>, and another for <strong>Album</strong> of <strong>Repeat Item 2</strong>.</li>
+              <li><span class="act">Text</span>: the <strong>Artist</strong> detail, <code>|</code>, the <strong>Album</strong> detail. Then <span class="act">Change Case</span> → <strong>lowercase</strong>.</li>
+              <li><span class="act">If</span> <strong>Updated Text</strong> <strong>is</strong> <strong>Key</strong>: <span class="act">Set Variable</span> <code>Song</code> to <strong>Repeat Item 2</strong>. End If.</li>
+            </ul></li>
+        </ul>
+        Leave its Otherwise empty.</div></li>
+      <li><span class="n">13</span><div><span class="act">If</span>: <strong>Song</strong> <strong>has any value</strong>.
+        <ul>
+          <li><strong>Between If and Otherwise:</strong> add <span class="act">Add to Playlist</span>. It reads "Add <span class="blank">Music</span> to <span class="blank">Playlist</span>". Tap the first blank → the variable <strong>Song</strong>; tap <span class="blank">Playlist</span> → the variable <strong>Playlist Name</strong>.</li>
           <li><strong>Between Otherwise and End If:</strong> add <span class="act">Get Dictionary Value</span>: <span class="blank">Key</span> → <code>index</code>; <span class="blank">Dictionary</span> → <strong>Repeat Item</strong>. Then add <span class="act">Add to Variable</span>: tap <span class="blank">Variable Name</span> → type <code>Missing</code>.</li>
         </ul></div></li>
     </ol>
@@ -168,7 +181,7 @@ shortcuts sign --mode anyone --input crate-add-songs-unsigned.shortcut --output 
     <p>These go <strong>after End Repeat</strong>, at the bottom.</p>
     <ol class="steps" start="14">
       <li><span class="n">14</span><div><span class="act">Combine Text</span>: tap its input → pick the variable <strong>Missing</strong>. Tap <span class="blank">New Lines</span> → <strong>Custom</strong> → type a comma <code>,</code></div></li>
-      <li><span class="n">15</span><div><span class="act">Text</span>: in its box, type <code>v2 missing:</code> (with a space after <code>v2</code>) and then, right after the colon with no space, tap <strong>Combined Text</strong> in the variable bar.</div></li>
+      <li><span class="n">15</span><div><span class="act">Text</span>: in its box, type <code>v3 missing:</code> (with a space after <code>v3</code>) and then, right after the colon with no space, tap <strong>Combined Text</strong> in the variable bar.</div></li>
       <li><span class="n">16</span><div><span class="act">Stop and Output</span>: its input should be <strong>Text</strong>. If it asks what to do when there's nowhere to output, leave it on <strong>Do Nothing</strong>.</div></li>
     </ol>
     <p>Tap <strong>Done</strong> to save.</p>
@@ -188,7 +201,7 @@ shortcuts sign --mode anyone --input crate-add-songs-unsigned.shortcut --output 
     <ul>
       <li><strong>The variable won't go in at step 9 or step 13:</strong> if the <span class="blank">Playlist</span> blank won't accept a variable, note what it offers instead.</li>
       <li><strong>Songs come back "not found"</strong> even though they're in your library: try removing the <strong>Album</strong> filter in step 11.</li>
-      <li><strong>Shortcuts shows an error:</strong> first make sure you have the current version (step 15's text should start <code>v2</code>), then note which step it highlights, if any.</li>
+      <li><strong>Shortcuts shows an error:</strong> first make sure you have the current version (step 15's text should start <code>v3</code>), then note which step it highlights, if any.</li>
     </ul>
   </section>
 </div>
