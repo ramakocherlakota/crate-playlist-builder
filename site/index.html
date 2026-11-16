@@ -394,7 +394,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
 
       <div class="card apple-only ios-only hl">
         <h3>On this iPhone</h3>
-        <div class="btns"><button type="button" class="primary" id="shortcutBtn" disabled>Add with Shortcuts</button><button type="button" id="shortcutUpdated" hidden>I've updated it</button></div>
+        <div class="btns"><button type="button" class="primary" id="shortcutBtn" disabled>Add with Shortcuts</button></div>
         <p class="hint" id="shortcutHint"></p>
       </div>
 
@@ -1610,14 +1610,9 @@ end exportLibrary
   // asked to reinstall from SHORTCUT_INSTALL_URL.
   const SHORTCUT_NAME = "Crate Add Songs";
   const SHORTCUT_VERSION = 4;
-  // Version 4 on also stops before adding anything when Crate needs a newer one: Crate sends "need_v2" … "need_vN"
-  // for the version N it needs, and a version-K shortcut stops if "need_v<K+1>" is present (a presence test,
-  // since Shortcuts won't compare dictionary values). Older copies can't do that, so Crate also remembers the
-  // version the last run reported and won't run one it knows is out of date.
-  const VERSION_KEY = "crate-playlist-builder:shortcut-version";
-  const knownVersion = () => { try { const v = localStorage.getItem(VERSION_KEY); return v == null ? null : Number(v); } catch (e) { return null; } };
-  const rememberVersion = v => { try { v == null ? localStorage.removeItem(VERSION_KEY) : localStorage.setItem(VERSION_KEY, String(v)); } catch (e) {} };
-  const knownOutdated = () => { const v = knownVersion(); return v != null && v < SHORTCUT_VERSION; };
+  // From version 4 the shortcut stops before adding anything when Crate needs a newer one: Crate sends "need_v2" …
+  // "need_vN" for the version N it needs, and a version-K shortcut stops if "need_v<K+1>" is present (a presence
+  // test, since Shortcuts won't compare dictionary values) and reports "vK outdated".
   // An iCloud share link is a snapshot: share the new version from Shortcuts and replace this link (and the one in
   // shortcut-setup.html) on each release.
   const SHORTCUT_INSTALL_URL = "shortcut-setup.html#h-quick";  // back to an iCloud link once it has version 4
@@ -1642,13 +1637,6 @@ end exportLibrary
   }
   function renderShortcutBtn() {
     const plan = shortcutPlan();
-    $("shortcutUpdated").hidden = !knownOutdated();
-    if (knownOutdated()) {
-      $("shortcutBtn").disabled = false;
-      $("shortcutBtn").textContent = `Get version ${SHORTCUT_VERSION} of the shortcut`;
-      $("shortcutHint").textContent = `Your “${SHORTCUT_NAME}” shortcut is version ${knownVersion() || 1}, which is out of date, so Crate won't run it. Install version ${SHORTCUT_VERSION} (delete the old one first), then tap “I've updated it”.`;
-      return;
-    }
     $("shortcutBtn").disabled = !plan.ok;
     $("shortcutBtn").textContent = !plan.ok ? "Add with Shortcuts"
       : `Add ${plan.total} song${plan.total === 1 ? "" : "s"}${plan.parts.length > 1 ? ` to ${plan.parts.length} playlists` : ""} with Shortcuts`;
@@ -1659,9 +1647,7 @@ end exportLibrary
     link.href = "shortcut-setup.html"; link.textContent = "How to set up the shortcut";
     $("shortcutHint").appendChild(link);
   }
-  $("shortcutUpdated").addEventListener("click", () => { rememberVersion(null); renderShortcutBtn(); });
   $("shortcutBtn").addEventListener("click", async () => {
-    if (knownOutdated()) { location.href = SHORTCUT_INSTALL_URL; return; }
     const plan = shortcutPlan();
     if (!plan.ok) return;
     const token = Math.random().toString(36).slice(2, 10);
@@ -1706,11 +1692,10 @@ end exportLibrary
     }
     const v = /\bv(\d+)\b/.exec(ret.result || "");
     const outdated = !v || Number(v[1]) < SHORTCUT_VERSION;
-    rememberVersion(v ? Number(v[1]) : 1);
     if (/\boutdated\b/.test(ret.result || "")) {  // the shortcut saw it was too old and stopped before adding
       $("bannerText").textContent = `Nothing was added: your “${SHORTCUT_NAME}” shortcut is version ${v ? v[1] : "?"} and Crate needs version ${SHORTCUT_VERSION}. `;
       $("bannerText").append(updateLink(`Get version ${SHORTCUT_VERSION}`), " (delete the old one first), then try again.");
-      refresh(); return;
+      return;
     }
     const m = /missing:([\d,\s]*)/.exec(ret.result || "");
     const missing = new Set(m ? m[1].split(",").map(x => x.trim()).filter(Boolean).map(Number) : []);
