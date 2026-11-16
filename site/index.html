@@ -1004,6 +1004,8 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
     const per = list.map(d => { const c = draftChanges(d); add += c.adds.length; rem += c.removes.length; return [d, c]; });
     const total = add + rem + list.filter(d => d.orig && isRenamed(d)).length;
     $("reviewBtn").textContent = total ? `Review & apply (${total})` : "Review & apply";
+    // Nothing to review or apply until something has changed.
+    $("reviewBtn").disabled = $("mobileReview").disabled = !total;
     $("mobileBarText").disabled = !total;
     $("mobileBarText").textContent = total ? `${total} change${total === 1 ? "" : "s"}${list.length > 1 ? ` in ${list.length} playlists` : ""}` : "No changes yet";
     $("reviewBtn").title = total ? `+${add} −${rem}${list.length > 1 ? ` across ${list.length} playlists` : ""}` : "No changes yet";
