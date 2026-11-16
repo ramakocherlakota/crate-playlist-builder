@@ -68,10 +68,20 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--hover)
     <h1><img src="icon.svg" alt="" class="logo" width="40" height="40">Crate Shortcut Setup</h1>
     <a class="back" href="./">← Back to Crate</a>
   </header>
-  <p class="lede">Step-by-step instructions for building the <strong>Crate Add Songs</strong> shortcut on your iPhone or iPad. You only do this once. Afterwards, Crate's <strong>Add with Shortcuts</strong> button adds songs to your playlists right on the phone, without the Mac.</p>
+  <p class="lede">How to get the <strong>Crate Add Songs</strong> shortcut onto your iPhone or iPad. You only do this once. Afterwards, Crate's <strong>Add with Shortcuts</strong> button adds songs to your playlists right on the phone, without the Mac.</p>
+
+  <section aria-labelledby="h-icloud">
+    <h2 id="h-icloud">Easiest: install it from iCloud (version 2)</h2>
+    <ol class="steps">
+      <li><span class="n">1</span><div>If you have an older <strong>Crate Add Songs</strong>, delete it first (press and hold it in Shortcuts → <strong>Delete</strong>), so the new one keeps the exact name Crate uses.</div></li>
+      <li><span class="n">2</span><div>On your iPhone or iPad, tap:<br><a class="dl" href="https://www.icloud.com/shortcuts/a8967f8f95804cb5aa334c61a6522f19">Get Crate Add Songs</a><br>Shortcuts opens and shows the shortcut. Tap <strong>Add Shortcut</strong>.</div></li>
+      <li><span class="n">3</span><div>Do the <a href="#h-first">first run</a> below. With iCloud sync on in Shortcuts, it also appears on your other devices.</div></li>
+    </ol>
+  </section>
+  <p class="or">or, with your Mac:</p>
 
   <section aria-labelledby="h-quick">
-    <h2 id="h-quick">Quick way: import a ready-made shortcut (needs your Mac)</h2>
+    <h2 id="h-quick">Import the shortcut file (needs your Mac)</h2>
     <p>Instead of building it by hand, download the shortcut file, have your Mac sign it (Apple only imports signed shortcuts), and add it.</p>
     <ol class="steps">
       <li><span class="n">1</span><div>On your Mac, first delete any older <code>crate-add-songs-unsigned</code> files and <code>Crate Add Songs.shortcut</code> from Downloads. Otherwise the browser saves the new one as <code>crate-add-songs-unsigned-2.shortcut</code> (or similar) and step 2 signs the old one. Then download the file:<br><a class="dl" href="crate-add-songs-unsigned.shortcut?v=20261115" download="crate-add-songs-unsigned.shortcut">Download crate-add-songs-unsigned.shortcut</a></div></li>
@@ -86,7 +96,7 @@ shortcuts sign --mode anyone --input crate-add-songs-unsigned.shortcut --output 
         </ul></div></li>
       <li><span class="n">4</span><div>Open it in Shortcuts and compare it with the steps below, especially the two <strong>If</strong> actions (steps 8 and 12), the three conditions in <strong>Find Music</strong> (step 11) and the playlist in <strong>Add to Playlist</strong> (step 13). If an action has a blank that didn't come through, fill it in as the steps describe.</div></li>
     </ol>
-    <p class="note"><strong>Updating?</strong> This is version 2 of the shortcut. When Crate says yours is out of date, delete the old <strong>Crate Add Songs</strong> on every device, and any old copies of the file in Downloads, then install this one.</p>
+    <p class="note"><strong>Updating?</strong> This is version 2 of the shortcut. When Crate says yours is out of date, delete the old <strong>Crate Add Songs</strong> on every device, and any old copies of the file in Downloads, then install this one (or use the iCloud link above).</p>
     <p class="note">This file was written by hand from Shortcuts' file format and hasn't been tested on a device yet. If signing reports an error, or parts are missing after importing, note the details.</p>
   </section>
   <p class="or">or build it yourself:</p>

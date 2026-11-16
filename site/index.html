@@ -448,7 +448,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
       <details class="apple-only ios-only setup" id="shortcutSetup">
         <summary>Set up the Crate shortcut (once)</summary>
         <p><strong>Add with Shortcuts</strong> adds songs to your changed playlists (creating new ones) right on this device, without the Mac. With Sync Library on, the change reaches your other devices. It does the additions for every playlist with changes; any removals or renames stay pending for the Mac script, or doing by hand in Music.</p>
-        <p><a href="shortcut-setup.html">Open the setup guide</a>: a ready-made shortcut you can import with your Mac's help, or every tap for building it yourself. Short version below.</p>
+        <p><a href="https://www.icloud.com/shortcuts/a8967f8f95804cb5aa334c61a6522f19"><strong>Get the shortcut from iCloud</strong></a> and tap <strong>Add Shortcut</strong> (delete any older Crate Add Songs first). Or <a href="shortcut-setup.html">open the setup guide</a> to import the file with your Mac, or build it yourself; the short version is below.</p>
         <p>In the Shortcuts app, tap <strong>+</strong> and name the new shortcut exactly <code>Crate Add Songs</code>. Then add these actions in order (tap a blue field to pick a variable):</p>
         <ol>
           <li><strong>Get Dictionary from Input</strong>, input: <em>Shortcut Input</em>. Then <strong>Get Dictionary Value</strong>: Value for <code>songs</code>.</li>
@@ -1590,7 +1590,9 @@ end exportLibrary
   // asked to reinstall from SHORTCUT_INSTALL_URL.
   const SHORTCUT_NAME = "Crate Add Songs";
   const SHORTCUT_VERSION = 2;
-  const SHORTCUT_INSTALL_URL = "shortcut-setup.html#h-quick";
+  // An iCloud share link is a snapshot: share the new version from Shortcuts and replace this link (and the one in
+  // shortcut-setup.html) on each release.
+  const SHORTCUT_INSTALL_URL = "https://www.icloud.com/shortcuts/a8967f8f95804cb5aa334c61a6522f19";
   const PENDING_KEY = "crate-playlist-builder:shortcut-pending";
   function shortcutPlan() {
     if (library.sample) return { ok: false, why: "Load your library first." };
@@ -1657,7 +1659,7 @@ end exportLibrary
     if (ret.outcome !== "ok") {
       if (ret.outcome === "cancel") { $("bannerText").textContent = "The shortcut was cancelled, so nothing was marked as added. Check the playlists in Music in case some songs went in."; return; }
       $("bannerText").textContent = `The “${SHORTCUT_NAME}” shortcut stopped with an error, so nothing was marked as added (check the playlists in Music in case some songs went in). The usual cause is an out-of-date copy of the shortcut: `;
-      $("bannerText").append(updateLink(`install version ${SHORTCUT_VERSION}`), " and delete the old one.");
+      $("bannerText").append(updateLink(`get version ${SHORTCUT_VERSION}`), " (delete the old one first).");
       return;
     }
     const v = /\bv(\d+)\b/.exec(ret.result || "");
@@ -1687,7 +1689,7 @@ end exportLibrary
       + (missingNames.length ? ` It couldn't find ${missingNames.map(n => `“${n}”`).join(", ")}; ${missingNames.length === 1 ? "that one stays" : "those stay"} pending.` : "")
       + (left.length ? ` Still pending for the Mac script or doing by hand in Music: ${left.join(", ")}.` : "")
       + (m ? "" : " (The shortcut didn't report back which songs it found, so check the playlists in Music.)");
-    if (outdated) $("bannerText").append(" Your “" + SHORTCUT_NAME + "” shortcut is out of date: ", updateLink(`install version ${SHORTCUT_VERSION}`), " and delete the old one.");
+    if (outdated) $("bannerText").append(" Your “" + SHORTCUT_NAME + "” shortcut is out of date: ", updateLink(`get version ${SHORTCUT_VERSION}`), " (delete the old one first).");
   }
 
   // Spotify support was removed; clear what it stored in this browser.
