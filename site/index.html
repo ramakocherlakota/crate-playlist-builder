@@ -197,6 +197,21 @@ a.button:hover { background: var(--hover); }
 .track { padding-left: 100px; font-size: 14px; }
 .track .num { width: 2.6em; text-align: right; color: var(--muted); font-family: var(--font-mono); font-size: 12px; flex: none; font-variant-numeric: tabular-nums; }
 .track.off .name { color: var(--muted); }
+.linkish { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; font: inherit; }
+.handtag { flex: none; font-size: 11.5px; padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); white-space: nowrap; cursor: help; }
+.handtag .narrow { display: none; }
+@media (max-width: 520px) { .row .handtag .wide { display: none; } .row .handtag .narrow { display: inline; } .row .handtag { padding: 1px 5px; } }
+.add-search { display: flex; gap: 8px; }
+.add-search input { flex: 1; min-width: 0; }
+.add-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.add-list li { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.add-list li:last-child { border-bottom: 0; }
+.add-list .song { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.add-list .song b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.add-list .song small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.add-list .done { color: var(--muted); font-size: 13.5px; white-space: nowrap; }
+.add-form { display: grid; gap: 8px; margin-top: 10px; }
+.add-form label { display: grid; gap: 3px; font-size: 13.5px; color: var(--muted); }
 .nosync { flex: none; font-size: 11.5px; padding: 1px 7px; border-radius: 999px; background: var(--warn-bg); color: var(--warn-fg); white-space: nowrap; cursor: help; }
 .draft-meta .warn, .changes .warn { color: var(--warn-fg); }
 .changes .warn { background: var(--warn-bg); padding: 4px 8px; border-radius: 6px; }
@@ -297,6 +312,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
       <div class="menu" id="libMenu" hidden>
         <div class="lbl" id="libMenuLabel">Library</div>
         <button type="button" class="mi" id="loadBtn">Load library file…</button>
+        <button type="button" class="mi" id="addSongBtn" hidden>Add a song that isn't here…</button>
         <div id="libWarn" hidden></div>
         <div class="sep"></div>
         <button type="button" class="mi danger" id="forgetBtn" hidden>Forget this library</button>
@@ -387,6 +403,37 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
   </div>
 </div>
 
+<!-- Add a song the loaded library file doesn't have yet (e.g. just bought on the phone). -->
+<div class="drawer-wrap" id="addSong" hidden>
+  <div class="scrim" data-close></div>
+  <section class="drawer" role="dialog" aria-modal="true" aria-labelledby="addSongTitle">
+    <div class="drawer-head"><h2 id="addSongTitle">Add a song</h2><button type="button" class="ghost" data-close aria-label="Close">✕</button></div>
+    <div class="drawer-body">
+      <p class="muted small">For a song that's in your Music library but not in the library file Crate has, like one you've just bought. Crate adds it to the tree, marked <span class="handtag">hand-added</span> (<span class="handtag">✎</span> on a phone), and ticks it in <strong id="addTarget">the open playlist</strong>. Once you load a library file that has the song, Crate switches to that copy and keeps your ticks.</p>
+      <form class="add-search" id="addForm">
+        <input type="search" id="addQuery" placeholder="Song and artist, e.g. YMCA Village People" aria-label="Search Apple Music" autocomplete="off">
+        <button type="submit" class="primary">Search</button>
+      </form>
+      <p class="muted small" id="addStatus" role="status"></p>
+      <ul class="add-list" id="addResults"></ul>
+      <details id="addManual">
+        <summary>Not in Apple's catalog? Enter it yourself</summary>
+        <p class="muted small">Type it exactly as the Music app shows it: the Mac script and the shortcut look for this title, artist and album (ignoring capitals).</p>
+        <form class="add-form" id="manualForm">
+          <label>Title <input id="manTitle" required autocomplete="off"></label>
+          <label>Artist <input id="manArtist" required autocomplete="off"></label>
+          <label>Album <input id="manAlbum" required autocomplete="off"></label>
+          <div class="btns"><button type="submit" class="primary">Add song</button></div>
+        </form>
+      </details>
+      <section id="addedBox" hidden>
+        <h3>Songs you've added</h3>
+        <ul class="add-list" id="addedList"></ul>
+      </section>
+    </div>
+  </section>
+</div>
+
 <!-- Phones: tapping the change count lists the changes in a sheet. -->
 <div class="drawer-wrap" id="changesPop" hidden>
   <div class="scrim" data-close></div>
@@ -435,7 +482,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
       <ol class="steps">
         <li><b>1</b><span>In Music on your Mac: <kbd>File → Library → Export Library…</kbd> and save the XML.</span></li>
         <li><b>2</b><span>Load that file here, or drag it onto this page. It stays in your browser, isn't uploaded, and is remembered here along with your edits.</span></li>
-        <li><b>3</b><span>Pick or start playlists on the left, then tick artists, albums or songs on the right. Switch between playlists any time.</span></li>
+        <li><b>3</b><span>Pick or start playlists on the left, then tick artists, albums or songs on the right. Switch between playlists any time. Song missing because you got it after exporting (say, bought on the phone)? Use <strong>Add a song that isn't here…</strong> in the library menu, or the link that appears when a search finds nothing.</span></li>
         <li><b>4</b><span>Press <strong>Review &amp; apply</strong>, copy the script, paste it into <kbd>Script Editor</kbd>, and press Run.</span></li>
       </ol>
       <section class="phone" aria-labelledby="phoneHead">
@@ -829,6 +876,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
     const nm = document.createElement("span"); nm.className = "name"; nm.textContent = label; nm.title = label;
     nm.addEventListener("click", () => caret ? caret.click() : cb.click());
     row.appendChild(nm);
+    if (opts.play && opts.play.extra) { const h = document.createElement("span"); h.className = "handtag"; h.innerHTML = '<span class="wide">hand-added</span><span class="narrow" aria-hidden="true">✎</span>'; h.setAttribute("aria-label", "hand-added"); h.title = "Added by hand: not in your library file yet. Crate switches to the real copy when you load a library file that has it."; row.appendChild(h); }
     if (opts.play && wontSync(opts.play)) { const w = document.createElement("span"); w.className = "nosync"; w.textContent = "won't sync"; w.title = noSyncHelp(opts.play); row.appendChild(w); }
     let chip = null;
     if (opts.expandable) { chip = document.createElement("span"); chip.className = "chip"; row.appendChild(chip); }
@@ -867,6 +915,11 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
     if (!view.length) {
       const e = document.createElement("div"); e.className = "empty";
       e.textContent = q ? `Nothing matches “${$("search").value.trim()}”.` : treeFilter === "in" ? "No songs in this playlist yet." : treeFilter === "changes" ? "No changes yet. Tick or untick songs and they'll show here." : "No songs in this library.";
+      if (q && treeFilter === "all" && !library.sample) {
+        const b = document.createElement("button"); b.type = "button"; b.className = "linkish"; b.textContent = "Add a song that isn't here…";
+        b.addEventListener("click", () => openAddSong($("search").value.trim()));
+        e.append(" ", b);
+      }
       frag.appendChild(e);
     }
     for (const { a, albums } of view) {
@@ -1106,7 +1159,13 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
   }
 
   // ---------- AppleScript ----------
-  function orderedPids(set) { const out = []; for (const a of artists) for (const id of a.ids) if (set.has(id)) out.push(trackById.get(id).pid); return out; }
+  // Hand-added songs have no persistent ID yet, so the script finds those by title, artist and album instead.
+  function orderedPids(set) { const out = []; for (const a of artists) for (const id of a.ids) if (set.has(id) && !trackById.get(id).extra) out.push(trackById.get(id).pid); return out; }
+  function orderedHandSongs(set) {
+    const out = [];
+    for (const a of artists) for (const id of a.ids) { const t = trackById.get(id); if (set.has(id) && t.extra) out.push(`{${asString(t.name)}, ${asString(t.artist)}, ${asString(t.album)}}`); }
+    return "{" + out.join(", ") + "}";
+  }
   function asString(s) { return '"' + s.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"'; }
   // The script applies changes rather than rebuilding: it adds ticked songs at the end and removes unticked
   // ones, skipping anything already done. Scripts from different devices can therefore be run in any order.
@@ -1116,7 +1175,7 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
       const name = d.name.trim() || "Untitled";
       const adds = d.orig ? new Set([...d.ids].filter(id => !d.orig.has(id))) : d.ids;
       const removes = d.orig ? new Set([...d.orig].filter(id => !d.ids.has(id))) : new Set();
-      return `set end of report to applyChanges(${asString(d.origPid || "")}, ${asString(d.orig ? d.origName : name)}, ${asString(name)}, "${orderedPids(adds).join(",")}", "${orderedPids(removes).join(",")}")`;
+      return `set end of report to applyChanges(${asString(d.origPid || "")}, ${asString(d.orig ? d.origName : name)}, ${asString(name)}, "${orderedPids(adds).join(",")}", "${orderedPids(removes).join(",")}", ${orderedHandSongs(adds)}, ${orderedHandSongs(removes)})`;
     }).join("\n");
     return `-- Made with Crate Playlist Builder: changes to ${list.length} playlist${list.length === 1 ? "" : "s"}
 on splitIDs(t)
@@ -1127,7 +1186,7 @@ on splitIDs(t)
 	return out
 end splitIDs
 
-on applyChanges(plID, findName, newName, addText, removeText)
+on applyChanges(plID, findName, newName, addText, removeText, addSongs, removeSongs)
 	-- Counter names are prefixed so they can't collide with Music's own terms
 	-- (e.g. "removed" is one of Music's cloud status values).
 	set addIDs to splitIDs(addText)
@@ -1160,6 +1219,25 @@ on applyChanges(plID, findName, newName, addText, removeText)
 				if (count of (every track of pl whose persistent ID is (contents of trackID))) is 0 then
 					try
 						duplicate (first track of library playlist 1 whose persistent ID is (contents of trackID)) to pl
+						set nAdded to nAdded + 1
+					on error
+						set nMissing to nMissing + 1
+					end try
+				end if
+			end repeat
+			-- Songs added by hand in Crate (not yet in its library file): found by title, artist and album.
+			repeat with songInfo in removeSongs
+				set {songTitle, songArtist, songAlbum} to contents of songInfo
+				if (count of (every track of pl whose name is songTitle and artist is songArtist and album is songAlbum)) > 0 then
+					delete (every track of pl whose name is songTitle and artist is songArtist and album is songAlbum)
+					set nRemoved to nRemoved + 1
+				end if
+			end repeat
+			repeat with songInfo in addSongs
+				set {songTitle, songArtist, songAlbum} to contents of songInfo
+				if (count of (every track of pl whose name is songTitle and artist is songArtist and album is songAlbum)) is 0 then
+					try
+						duplicate (first track of library playlist 1 whose name is songTitle and artist is songArtist and album is songAlbum) to pl
 						set nAdded to nAdded + 1
 					on error
 						set nMissing to nMissing + 1
@@ -1474,6 +1552,9 @@ end exportLibrary
     const pidOfId = new Map(library.tracks.map(t => [t.id, t.pid]));
     let outside = 0;  // songs added or removed elsewhere (the Music app, another device) and picked up
     drafts = saved.drafts.map(d => {
+      // A hand-added song that's now in the library file: its saved ticks move to the real copy.
+      const real = p => extraAlias.get(p) || p;
+      d = { ...d, pids: (d.pids || []).map(real), origPids: d.origPids ? d.origPids.map(real) : d.origPids };
       let ids = null, orig = null;
       let origName = d.origName, origPid = d.origPid || "", origAt = d.origAt || 0;
       if (origName != null) {
@@ -1536,6 +1617,7 @@ end exportLibrary
   // ---------- loading ----------
   function loadLibrary(lib, fileName, opts = {}) {
     saving = false;
+    const switched = lib.sample ? [] : mergeExtras(lib);
     undoStack.length = 0; renderUndo();  // snapshots refer to the previous library's songs
     library = lib; openArtists.clear(); openAlbums.clear();
     showPlaylists();
@@ -1547,7 +1629,7 @@ end exportLibrary
     }
     active = 0; selected = drafts[0].ids; $("plName").value = drafts[0].name;
     buildTree(); fillPlaylists(); render();
-    $("forgetBtn").hidden = !!lib.sample;
+    $("forgetBtn").hidden = !!lib.sample; $("addSongBtn").hidden = !!lib.sample;
     $("bannerLoad").hidden = !lib.sample;
     renderLoadBtn();
     $("libWarn").hidden = true;
@@ -1559,8 +1641,9 @@ end exportLibrary
     }
     setWelcome(false);
     const when = new Date(lib.loadedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-    $("libChipText").textContent = `${lib.tracks.length.toLocaleString()} songs · ${when}`;
-    $("libChip").title = `${fileName}: ${lib.tracks.length.toLocaleString()} songs by ${artists.length.toLocaleString()} artists, ${lib.playlists.length} playlist${lib.playlists.length === 1 ? "" : "s"}, ${opts.restored ? "remembered from" : "loaded"} ${when}.`;
+    const fileSongs = lib.tracks.filter(t => !t.extra).length;
+    $("libChipText").textContent = `${fileSongs.toLocaleString()} songs · ${when}`;
+    $("libChip").title = `${fileName}: ${fileSongs.toLocaleString()} songs${extras.length ? ` (plus ${extras.length} added by hand)` : ""} by ${artists.length.toLocaleString()} artists, ${lib.playlists.length} playlist${lib.playlists.length === 1 ? "" : "s"}, ${opts.restored ? "remembered from" : "loaded"} ${when}.`;
     const blocked = lib.playlists.filter(p => !p.smart && p.ids.some(id => wontSync(trackById.get(id))));
     $("libDot").className = "dot " + (blocked.length ? "warn" : "ok");
     if (blocked.length) {
@@ -1569,12 +1652,14 @@ end exportLibrary
     }
     // The sample-songs banner no longer applies once a real library is in (other notices stay).
     if (sampleBannerShown || !opts.restored) { $("banner").hidden = true; sampleBannerShown = false; }
-    status(opts.restored ? "" : `Loaded ${lib.tracks.length.toLocaleString()} songs and ${lib.playlists.length} playlist${lib.playlists.length === 1 ? "" : "s"}.`);
+    status(opts.restored ? "" : `Loaded ${fileSongs.toLocaleString()} songs and ${lib.playlists.length} playlist${lib.playlists.length === 1 ? "" : "s"}.`);
+    const switchNote = switched.length ? `${switched.map(n => `“${n}”`).join(", ")} ${switched.length === 1 ? "is" : "are"} now in the library file, so Crate switched to ${switched.length === 1 ? "that copy" : "those copies"} (no longer hand-added).` : "";
     libraryName = fileName;
     if (!opts.restored) saveLibrary();
     // Saved edits are merged onto the newly loaded playlists (see restoreDrafts), so only your own
     // unapplied edits remain pending and there's nothing to ask about.
     restoreDrafts().finally(() => {
+      if (switchNote) status(($("status").textContent + " " + switchNote).trim());
       saving = true; scheduleSave();
       if (shortcutReturn && !shortcutReturn.handled) { shortcutReturn.handled = true; finishShortcut(shortcutReturn); }
     });
@@ -1586,7 +1671,8 @@ end exportLibrary
       return;
     }
     saving = false; clearTimeout(saveTimer);
-    await Promise.all([store.del("library"), store.del("drafts")]);
+    await Promise.all([store.del("library"), store.del("drafts"), store.del("extras")]);
+    extras = [];
     try { localStorage.removeItem(VIEW_KEY); } catch (e) {}
     $("search").value = ""; $("byAlbumArtist").checked = true; treeFilter = "all";
     $("ignoreSort").checked = false; $("orderAz").checked = true;
@@ -1633,8 +1719,116 @@ end exportLibrary
     $("loadBtn").textContent = library.sample ? "Load library file…" : "Load a newer library file…";
   }
   function saveLibrary() {
-    store.set("library", { fileName: libraryName, loadedAt: library.loadedAt, tracks: library.tracks, playlists: library.playlists });
+    store.set("library", { fileName: libraryName, loadedAt: library.loadedAt, tracks: library.tracks.filter(t => !t.extra), playlists: library.playlists });
   }
+
+  // ---------- songs added by hand ----------
+  // A song bought on the phone (say) is in Music but not in the library file Crate loaded. It can be added from
+  // Apple's catalog (iTunes Search API) or typed in, and is kept separately ("extras") with a made-up persistent ID.
+  // The shortcut finds songs by title, artist and album anyway; the Mac script does the same for these. When a
+  // loaded library file has the same title, artist and album (ignoring capitals), Crate switches to that copy.
+  let extras = [];
+  const extraAlias = new Map();  // made-up pid -> real pid, for edits saved before the real song arrived
+  const songKey = (name, artist, album) => [name, artist, album].map(x => (x || "").toLowerCase().replace(/\s+/g, " ").trim()).join("\u0001");
+  const saveExtras = () => store.set("extras", extras);
+  const extraTrack = e => ({ id: e.pid, pid: e.pid, name: e.name, artist: e.artist, albumArtist: e.albumArtist || "", album: e.album,
+    sortAlbumArtist: "", sortArtist: "", sortAlbum: "", year: e.year || 0, disc: e.disc || 1, num: e.num || 0, ms: e.ms || 0, added: "", cloud: "", extra: true });
+  function mergeExtras(lib) {
+    lib.tracks = lib.tracks.filter(t => !t.extra);
+    const real = new Map(lib.tracks.map(t => [songKey(t.name, t.artist, t.album), t]));
+    const keep = [], switched = [];
+    for (const e of extras) {
+      const t = real.get(songKey(e.name, e.artist, e.album));
+      if (t) { extraAlias.set(e.pid, t.pid); switched.push(t.name); }
+      else { keep.push(e); lib.tracks.push(extraTrack(e)); }
+    }
+    if (switched.length) { extras = keep; saveExtras(); }
+    return switched;
+  }
+  function inLibrary(name, artist, album) {
+    const k = songKey(name, artist, album);
+    return library.tracks.find(t => songKey(t.name, t.artist, t.album) === k);
+  }
+  function showSong(t) {
+    closePanel("addSong");
+    $("search").value = t.name; saveView(); render();
+    if (typeof showEditor === "function") showEditor();
+  }
+  function addExtra(e) {
+    const have = inLibrary(e.name, e.artist, e.album);
+    if (have) return have;
+    extras.push(e); saveExtras();
+    const t = extraTrack(e);
+    library.tracks.push(t); buildTree();
+    checkpoint(`add ${e.name}`);
+    drafts[active].ids.add(t.id);
+    $("search").value = e.name; saveView();
+    refresh(); render(); renderAdded();
+    status(`Added “${e.name}” and ticked it in “${drafts[active].name.trim() || "Untitled"}”.`);
+    return t;
+  }
+  function removeExtra(pid) {
+    const e = extras.find(x => x.pid === pid); if (!e) return;
+    extras = extras.filter(x => x.pid !== pid); saveExtras();
+    library.tracks = library.tracks.filter(t => t.id !== pid);
+    for (const d of drafts) { d.ids.delete(pid); if (d.orig) d.orig.delete(pid); }
+    undoStack.length = 0; renderUndo();  // snapshots may refer to the removed song
+    buildTree(); refresh(); render(); renderAdded();
+    status(`Removed “${e.name}” from Crate.`);
+  }
+  function songItem(title, sub, action) {
+    const li = document.createElement("li");
+    const song = document.createElement("span"); song.className = "song";
+    const b = document.createElement("b"); b.textContent = title; b.title = title;
+    const sm = document.createElement("small"); sm.textContent = sub; sm.title = sub;
+    song.append(b, sm); li.append(song, action); return li;
+  }
+  const button = (label, fn, cls) => { const b = document.createElement("button"); b.type = "button"; b.textContent = label; if (cls) b.className = cls; b.addEventListener("click", fn); return b; };
+  function renderAdded() {
+    const ul = $("addedList"); ul.textContent = "";
+    $("addedBox").hidden = !extras.length;
+    for (const e of extras) ul.appendChild(songItem(e.name, [e.artist, e.album].filter(Boolean).join(" · "), button("Remove", () => removeExtra(e.pid))));
+  }
+  function openAddSong(query) {
+    $("addTarget").textContent = `“${drafts[active].name.trim() || "Untitled"}”`;
+    renderAdded();
+    $("addResults").textContent = ""; $("addStatus").textContent = "";
+    if (query != null) $("addQuery").value = query;
+    openPanel("addSong");
+    $("addQuery").focus();
+    if ($("addQuery").value.trim()) searchCatalog();
+  }
+  async function searchCatalog() {
+    const q = $("addQuery").value.trim(); if (!q) return;
+    const ul = $("addResults"); ul.textContent = "";
+    $("addStatus").textContent = "Searching Apple Music…";
+    let data;
+    try { data = await jsonp(`https://itunes.apple.com/search?media=music&entity=song&limit=25&country=${COUNTRY}&term=${encodeURIComponent(q)}`); }
+    catch (err) { $("addStatus").textContent = "Couldn't reach Apple's catalog. Check the connection, or enter the song yourself below."; return; }
+    const results = (data.results || []).filter(r => r.trackName && r.artistName);
+    $("addStatus").textContent = results.length ? `${results.length} result${results.length === 1 ? "" : "s"}. Pick the version that's in your library (same album).` : "Nothing found. Try different words, or enter the song yourself below.";
+    for (const r of results) {
+      const e = { pid: "itunes:" + r.trackId, name: r.trackName, artist: r.artistName, albumArtist: r.collectionArtistName || "", album: r.collectionName || "",
+        year: Number((r.releaseDate || "").slice(0, 4)) || 0, disc: r.discNumber || 1, num: r.trackNumber || 0, ms: r.trackTimeMillis || 0 };
+      const sub = [e.artist, e.album, e.year || ""].filter(Boolean).join(" · ");
+      const have = inLibrary(e.name, e.artist, e.album);
+      const li = songItem(e.name, sub, have
+        ? button(have.extra ? "Added" : "In library", () => showSong(have))
+        : button("Add", () => { const t = addExtra(e); li.lastChild.replaceWith(button("Added", () => showSong(t))); }, "primary"));
+      ul.appendChild(li);
+    }
+  }
+  $("addForm").addEventListener("submit", e => { e.preventDefault(); searchCatalog(); });
+  $("manualForm").addEventListener("submit", e => {
+    e.preventDefault();
+    const name = $("manTitle").value.trim(), artist = $("manArtist").value.trim(), album = $("manAlbum").value.trim();
+    if (!name || !artist) return;
+    const have = inLibrary(name, artist, album);
+    if (have) { $("addStatus").textContent = `“${have.name}” is already ${have.extra ? "added" : "in your library"}.`; return; }
+    addExtra({ pid: "hand:" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name, artist, albumArtist: "", album });
+    $("manualForm").reset(); $("addStatus").textContent = `Added “${name}”.`;
+  });
+  $("addSongBtn").addEventListener("click", () => openAddSong(""));
 
   // ---------- Apple Music: add songs on this device with a Shortcut ----------
   // Shortcuts can add songs to playlists and create playlists, but not remove songs or rename, so this path sends
@@ -1737,6 +1931,7 @@ end exportLibrary
     const m = /missing:([\d,\s]*)/.exec(ret.result || "");
     const missing = new Set(m ? m[1].split(",").map(x => x.trim()).filter(Boolean).map(Number) : []);
     const idOf = new Map(library.tracks.map(t => [t.pid, t.id]));
+    for (const [from, to] of extraAlias) if (idOf.has(to)) idOf.set(from, idOf.get(to));
     const added = new Map(), missingNames = [];  // playlist name -> {target, create, ids}
     pending.sent.forEach((x, i) => {
       const id = idOf.get(x.pid); if (!id) return;
@@ -1766,7 +1961,8 @@ end exportLibrary
   ["spotify:matches", "spotify:sent", "spotify:library", "spotify:drafts"].forEach(k => store.del(k));
   try { ["crate-spotify-auth", "crate-spotify-pkce", "crate-spotify-playlists", "crate-playlist-builder:source"].forEach(k => localStorage.removeItem(k)); } catch (e) {}
   loadLibrary(library);
-  store.get("library").then(saved => {
+  Promise.all([store.get("library"), store.get("extras")]).then(([saved, ex]) => {
+    extras = Array.isArray(ex) ? ex : [];
     if (saved && saved.tracks && library.sample) loadLibrary({ tracks: saved.tracks, playlists: saved.playlists || [], loadedAt: saved.loadedAt, sample: false }, saved.fileName, { restored: true });
     else if (library.sample) setWelcome(true);
   }).finally(doneBooting);

@@ -23,6 +23,17 @@ On a phone the playlist list and the playlist being edited are separate screens 
    - on the Mac, with a generated AppleScript run in Script Editor. Copy or download it, or on an iPhone/iPad use **Share script** (the main button there) to AirDrop it to the Mac. One script covers every playlist you changed. It finds each song by its persistent ID, so it works for streaming Apple Music songs as well as local files.
    - on the phone, with **Add with Shortcuts** (additions only; see below).
 
+### Songs that aren't in the library file yet
+
+A song bought or added after the export (say, bought on the phone) can be added by hand. Use **Add a song that isn't here…** in the library menu, or the link that appears when a search finds nothing. It searches Apple's catalog through the iTunes Search API, the same lookup the previews use, or takes a typed title, artist and album. The song goes into the tree marked **hand-added** (✎ on a phone) and is ticked in the open playlist.
+
+Hand-added songs are kept separately from the library, under the IndexedDB key `extras`, with a made-up persistent ID (`itunes:<trackId>` or `hand:<random>`), so they survive loading a new library file. Because they have no real persistent ID:
+
+- the Mac script finds them by title, artist and album (`addSongs` / `removeSongs` in `applyChanges`);
+- the shortcut already finds every song that way.
+
+When a loaded library file has a song with the same title, artist and album (ignoring capitals), Crate switches to that copy, moves your ticks over and drops the hand-added one. The **Add a song** panel lists hand-added songs, each with a **Remove** button.
+
 To use Crate like an app on the phone, use Safari's Share → **Add to Home Screen**: the page supplies the icon and the name "Crate". It deliberately doesn't run as a full-screen web app, because that would have its own storage, separate from Safari's, and the return from Shortcuts always opens in Safari.
 
 ### Changes, not rewrites
