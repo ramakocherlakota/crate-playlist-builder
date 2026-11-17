@@ -25,7 +25,7 @@ On a phone the playlist list and the playlist being edited are separate screens 
 
 ### Songs that aren't in the library file yet
 
-A song bought or added after the export (say, bought on the phone) can be added by hand. Use **Add a song that isn't here…** in the library menu, or the link that appears when a search finds nothing. It searches Apple's catalog through the iTunes Search API, the same lookup the previews use, or takes a typed title, artist and album. The song goes into the tree marked **hand-added** (✎ on a phone) and is ticked in the open playlist.
+A song bought or added after the export (say, bought on the phone) can be added by hand. Use **Add a song that isn't here…** in the library menu, or the link that appears when a search finds nothing. It searches Apple's catalog through the iTunes Search API, the same lookup the previews use (via the site's `/search`; see Hosting), or takes a typed title, artist and album. The song goes into the tree marked **hand-added** (✎ on a phone) and is ticked in the open playlist.
 
 Hand-added songs are kept separately from the library, under the IndexedDB key `extras`, with a made-up persistent ID (`itunes:<trackId>` or `hand:<random>`), so they survive loading a new library file. Because they have no real persistent ID:
 
@@ -127,7 +127,10 @@ Shortcuts can't remove songs or rename playlists, so only additions are sent, us
 - a CloudFront distribution (HTTPS, reads the bucket through Origin Access Control)
 - an ACM certificate for `crate.ramakocherlakota.net`, validated automatically through Route 53
 - Route 53 A/AAAA alias records pointing at CloudFront
+- a second CloudFront origin and cache behaviour that pass `/search` on to Apple's catalog search
 - an IAM role that GitHub Actions on `main` assumes via OIDC (no stored AWS keys)
+
+The distribution also forwards `/search` to Apple's catalog search (`itunes.apple.com/search`), caching results for a day. iPhones are turned away when they ask Apple directly, so Crate's song previews and **Add a song** ask `/search` on Crate's own site first, falling back to asking Apple directly where that isn't set up.
 
 ### One-time setup
 
@@ -157,6 +160,8 @@ gh variable set AWS_ROLE_ARN --body "<DeployRoleArn>"
 gh variable set S3_BUCKET --body "<BucketName>"
 gh variable set CLOUDFRONT_DISTRIBUTION_ID --body "<DistributionId>"
 ```
+
+To change the stack later (for example, after editing `infra/site.yml`), run the same `aws cloudformation deploy` command. `HostedZoneId` and any other parameters you set before keep their values, so you can leave out `--parameter-overrides`. GitHub's deploys only update the files in the bucket, not the stack.
 
 ### Deploys
 

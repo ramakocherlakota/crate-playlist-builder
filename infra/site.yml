@@ -78,12 +78,43 @@ Resources:
             OriginAccessControlId: !GetAtt OriginAccessControl.Id
             S3OriginConfig:
               OriginAccessIdentity: ""
+          # Apple's catalog search (iTunes Search API). iPhones are turned away when they ask it directly, so the
+          # app asks /search on its own site and CloudFront passes the request on.
+          - Id: itunes
+            DomainName: itunes.apple.com
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols: [TLSv1.2]
+        CacheBehaviors:
+          - PathPattern: /search
+            TargetOriginId: itunes
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD]
+            CachedMethods: [GET, HEAD]
+            Compress: true
+            CachePolicyId: !Ref CatalogCachePolicy
         DefaultCacheBehavior:
           TargetOriginId: s3
           ViewerProtocolPolicy: redirect-to-https
           Compress: true
           # AWS managed "CachingOptimized" policy
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+
+  # Search results are keyed on the whole query string and kept for a day, which also eases Apple's rate limit.
+  CatalogCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Name: !Sub "${AWS::StackName}-catalog-search"
+        DefaultTTL: 86400
+        MinTTL: 0
+        MaxTTL: 604800
+        ParametersInCacheKeyAndForwardedToOrigin:
+          EnableAcceptEncodingGzip: true
+          EnableAcceptEncodingBrotli: true
+          HeadersConfig: { HeaderBehavior: none }
+          CookiesConfig: { CookieBehavior: none }
+          QueryStringsConfig: { QueryStringBehavior: all }
 
   BucketPolicy:
     Type: AWS::S3::BucketPolicy
