@@ -909,8 +909,13 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
     return { row, caret };
   }
 
+  // Search ignores capitals, accents and punctuation, so "ymca" finds "Y.M.C.A." and "beyonce" finds "Beyoncé".
+  const fold = s => (s || "").normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, "").replace(/\s+/g, " ").trim();
+  const foldCache = new WeakMap();
+  const folded = o => { let f = foldCache.get(o); if (f === undefined) foldCache.set(o, f = fold(o.name)); return f; };
   function render() {
-    const q = $("search").value.trim().toLowerCase();
+    const raw = $("search").value.trim();
+    const q = fold(raw) || raw.toLowerCase();
     const tree = $("tree");
     const base = drafts[active]?.orig || new Set();  // what the playlist held before your edits
     const keep = treeFilter === "in" ? (t => selected.has(t.id))
@@ -922,11 +927,11 @@ textarea { width: 100%; height: 160px; font-family: var(--font-mono); font-size:
     const view = [];
     let matchedTracks = 0;
     for (const a of artists) {
-      const aHit = !q || a.name.toLowerCase().includes(q);
+      const aHit = !q || folded(a).includes(q);
       const albums = [];
       for (const al of a.albums) {
-        const alHit = aHit || al.name.toLowerCase().includes(q);
-        let tracks = alHit ? al.tracks : al.tracks.filter(t => t.name.toLowerCase().includes(q));
+        const alHit = aHit || folded(al).includes(q);
+        let tracks = alHit ? al.tracks : al.tracks.filter(t => folded(t).includes(q));
         if (keep) tracks = tracks.filter(keep);
         if (tracks.length) { albums.push({ al, tracks }); matchedTracks += tracks.length; }
       }
@@ -1806,6 +1811,27 @@ end exportLibrary
     song.append(b, sm); li.append(song, action); return li;
   }
   const button = (label, fn, cls) => { const b = document.createElement("button"); b.type = "button"; b.textContent = label; if (cls) b.className = cls; b.addEventListener("click", fn); return b; };
+  // One button per result, naming the open playlist: add the song to Crate and tick it there, tick a song Crate
+  // already has, or show one that's already ticked.
+  const openName = () => `“${drafts[active].name.trim() || "Untitled"}”`;
+  function resultButton(e) {
+    const have = inLibrary(e.name, e.artist, e.album);
+    if (have && drafts[active].ids.has(have.id)) return button(`In ${openName()} ✓`, () => showSong(have));
+    const b = button(`Add to ${openName()}`, () => {
+      const t = have ? tickExisting(have) : addExtra(e);
+      b.replaceWith(button(`In ${openName()} ✓`, () => showSong(t)));
+    }, "primary");
+    if (have) b.title = have.extra ? "Already added to Crate by hand" : "Already in your library file";
+    return b;
+  }
+  function tickExisting(t) {
+    checkpoint(`tick ${t.name}`);
+    drafts[active].ids.add(t.id);
+    $("search").value = t.name; saveView();
+    refresh(); render();
+    status(`Ticked “${t.name}” in ${openName()}.`);
+    return t;
+  }
   function renderAdded() {
     const ul = $("addedList"); ul.textContent = "";
     $("addedBox").hidden = !extras.length;
@@ -1840,10 +1866,7 @@ end exportLibrary
       const e = { pid: "itunes:" + r.trackId, name: r.trackName, artist: r.artistName, albumArtist: r.collectionArtistName || "", album: r.collectionName || "",
         year: Number((r.releaseDate || "").slice(0, 4)) || 0, disc: r.discNumber || 1, num: r.trackNumber || 0, ms: r.trackTimeMillis || 0 };
       const sub = [e.artist, e.album, e.year || ""].filter(Boolean).join(" · ");
-      const have = inLibrary(e.name, e.artist, e.album);
-      const li = songItem(e.name, sub, have
-        ? button(have.extra ? "Added" : "In library", () => showSong(have))
-        : button("Add", () => { const t = addExtra(e); li.lastChild.replaceWith(button("Added", () => showSong(t))); }, "primary"));
+      const li = songItem(e.name, sub, resultButton(e));
       ul.appendChild(li);
     }
   }
@@ -1853,7 +1876,7 @@ end exportLibrary
     const name = $("manTitle").value.trim(), artist = $("manArtist").value.trim(), album = $("manAlbum").value.trim();
     if (!name || !artist) return;
     const have = inLibrary(name, artist, album);
-    if (have) { $("addStatus").textContent = `“${have.name}” is already ${have.extra ? "added" : "in your library"}.`; return; }
+    if (have) { tickExisting(have); $("manualForm").reset(); $("addStatus").textContent = `“${have.name}” was already in Crate, so it's now ticked in ${openName()}.`; return; }
     addExtra({ pid: "hand:" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name, artist, albumArtist: "", album });
     $("manualForm").reset(); $("addStatus").textContent = `Added “${name}”.`;
   });
